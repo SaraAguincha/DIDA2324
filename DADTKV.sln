@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.7.34031.279
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TServer", "TServer\TServer.csproj", "{4B890150-4D08-4768-940E-FDE38D128398}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TServer", "TServer\TServer.csproj", "{4B890150-4D08-4768-940E-FDE38D128398}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Client", "Client\Client.csproj", "{C45244C3-CA09-43DB-B421-B1E444C80053}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Client", "Client\Client.csproj", "{C45244C3-CA09-43DB-B421-B1E444C80053}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LServer", "LServer\LServer.csproj", "{75B8D5EF-2F4F-415E-A968-B879961A4F35}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LServer", "LServer\LServer.csproj", "{75B8D5EF-2F4F-415E-A968-B879961A4F35}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
