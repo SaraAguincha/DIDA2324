@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+// Commands that the client can use
+service ClientTServerService {
+	rpc TxSubmit (TxSubmitRequest) returns (TxSubmitReply);
+	rpc Status (StatusRequest) returns (StatusReply);
+}
+
+/* Request for a Transaction
+	- client identifier
+	- list of keys of DadInt to be read
+	- list of DadInt to written
+*/
+message TxSubmitRequest {
+	string clientId = 1;
+	repeated string account = 2;
+	repeated DadInt dadInts = 3;
+}
+
+/* Reply for a Transaction
+	- list of DadInt read
+	OR IN CASE OF ABORT
+	- a single DadInt with the key abort
+*/
+message TxSubmitReply {
+	repeated DadInt dadInts = 1;
+}
+
+/* Object DadInt
+	- Key is the string (account)
+	- Value is an int (value of the transaction)
+*/
+message DadInt {
+	string account = 1;
+	int32 value = 2;
+}
+
+// Requests the states of all the nodes in the system
+message StatusRequest {
+	bool ok = 1;
+}
+
+// Reply with a list with all the system nodes
+// TODO - define the node identifier
+message StatusReply {
+	//repeated string status = 1;
+	bool status = 1;
+}
