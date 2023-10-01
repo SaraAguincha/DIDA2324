@@ -1,6 +1,8 @@
 ﻿using Client.Services;
+using Google.Protobuf;
 using Grpc.Core;
 using Grpc.Net.Client;
+using System.Text.RegularExpressions;
 
 // Client
 class Program
@@ -21,11 +23,63 @@ class Program
         AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
         while (true)
         {
-            // for test purposes
-            if (Console.ReadKey().Key == ConsoleKey.P)
+            // Parsing according to the config files
+            // First char will be the command to be executed!
+
+            switch (Console.ReadKey().KeyChar)
             {
-                bool reply = client.Status();
-                Console.Write("server responded with: " + reply);
+                // Transaction command, will have a list of DadInts to read and to write (may be empty)
+                // has the following format:  T ("a-key-name","another-key-name") (<"name1",10>,<"name2",20>) 
+                case 'T': case 't':
+                    string readCommand = Console.ReadLine();
+                    // string with two elements, list of reads and list of writes
+                    string[] operations = Regex.Split(readCommand, @"\s+");
+
+                    if (operations == null || operations?.Length != 3) 
+                    { 
+                        Console.WriteLine("Invalid number of arguments.");
+                        break;
+                    }
+
+                    // List of dadInts to read and to write
+                    List<string> reads = new List<string>();
+                    List<DadInt> writes = new List<DadInt>();
+
+                    // TODO - Fix read pattern
+                    string readPattern = @"[0-9a-zA-Z-:_]+";
+                    string writePattern = @"<""([0-9a-zA-Z-:_]*?)\"",(\d+)>";
+
+                    Regex readRegex = new Regex(readPattern);
+                    Regex writeRegex = new Regex(writePattern);
+
+                    // Iterate through matches and add them to write and read list
+                    foreach (Match match in readRegex.Matches(operations[1]))
+                    {
+                        reads.Add(match.Value);
+                    }
+                    foreach (Match match in writeRegex.Matches(operations[2]))
+                    {
+                        DadInt dadInt = new DadInt();
+                        // Group[1] holds the key, Group[2] holds the value
+                        dadInt.Key = match.Groups[1].Value;
+                        if (Int32.TryParse(match.Groups[2].Value, out int intValue)) { dadInt.Val = intValue; }
+                        writes.Add(dadInt);
+                    }
+
+                    //Console.WriteLine(reads[0] + "\n" + reads[1]);
+                    //Console.WriteLine(writes[0].Key + "\n" + writes[1].Key);
+
+                    break;
+
+                // Status command
+                // TODO, not sure what the key for this command is, not specified
+                case 'S': case 's':
+                    bool reply = client.Status();
+                    Console.WriteLine("server responded with: " + reply);
+                    break;
+                default:
+                    Console.WriteLine("no command found :(");
+                    break;
             }
         }
     }

@@ -31,8 +31,8 @@ message TxSubmitReply {
 	- Value is an int (value of the transaction)
 */
 message DadInt {
-	string account = 1;
-	int32 value = 2;
+	string key = 1;
+	int32 val = 2;
 }
 
 // Requests the states of all the nodes in the system
