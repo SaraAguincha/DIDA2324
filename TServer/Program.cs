@@ -21,7 +21,7 @@ class Program
         string TManagerId = initialArgs[0];            //args[0] when script implemented
 
         string urlPattern = @"http://([^:/]+):(\d+)";
-        Match match = Regex.Match(initialArgs[1], urlPattern);
+        Match match = Regex.Match(initialArgs[2], urlPattern);
 
         string hostname = match.Groups[1].Value;            // group 1 will contain the IP address
         int port = Int32.Parse(match.Groups[2].Value);      // group 2 will contain the port
@@ -48,7 +48,7 @@ class Program
         //Configuring HTTP for client connections in Register method
         AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
         
-        Console.WriteLine("Server is running in the port: " + port + " and is ready to accept requests...");
+        Console.WriteLine("Server is running on port: " + port + " and is ready to accept requests...");
         while (true) ;
     }
 }

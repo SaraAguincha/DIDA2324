@@ -46,8 +46,7 @@ class Program
                     List<string> reads = new List<string>();
                     List<DadInt> writes = new List<DadInt>();
 
-                    // TODO - Fix read pattern
-                    string readPattern = @"[0-9a-zA-Z-:_]+";
+                    string readPattern = @"""(.*?)""";
                     string writePattern = @"<""([0-9a-zA-Z-:_]*?)\"",(\d+)>";
 
                     Regex readRegex = new Regex(readPattern);
@@ -56,7 +55,8 @@ class Program
                     // Iterate through matches and add them to write and read list
                     foreach (Match match in readRegex.Matches(operations[1]))
                     {
-                        reads.Add(match.Value);
+                        //Groups[1] is the string between the quotes
+                        reads.Add(match.Groups[1].Value);
                     }
                     foreach (Match match in writeRegex.Matches(operations[2]))
                     {
@@ -66,7 +66,7 @@ class Program
                         if (Int32.TryParse(match.Groups[2].Value, out int intValue)) { dadInt.Val = intValue; }
                         writes.Add(dadInt);
                     }
-
+                    //Console.WriteLine("Reads: " + reads.Count + "\nWrites: " + writes.Count);
                     //Console.WriteLine(reads[0] + "\n" + reads[1]);
                     //Console.WriteLine(writes[0].Key + "\n" + writes[1].Key);
 

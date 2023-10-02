@@ -5,10 +5,25 @@ service PaxosService {
 	rpc Accept (AcceptRequest) returns (AcceptedReply);
 }
 
-message PrepareRequest {}
+message PrepareRequest {
+	int32 slot = 1;
+	int32 leaderId = 2;
+}
 
-message PromiseReply {}
+message PromiseReply {
+	int32 slot = 1;
+	int32 value = 2;
+	int32 readTimestamp = 3;
+}
 
-message AcceptRequest {}
+message AcceptRequest {
+	int32 slot = 1;
+	int32 leaderId = 2;
+	int32 value = 3;
+}
 
-message AcceptedReply {}
+message AcceptedReply {
+	int32 slot = 1;
+	int32 value = 2;
+	int32 writeTimestamp = 3;
+}
