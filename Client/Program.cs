@@ -29,7 +29,8 @@ class Program
             switch (Console.ReadKey().KeyChar)
             {
                 // Transaction command, will have a list of DadInts to read and to write (may be empty)
-                // has the following format:  T ("a-key-name","another-key-name") (<"name1",10>,<"name2",20>) 
+                // has the following format:
+                // T ("a-key-name","another-key-name") (<"name1",10>,<"name2",20>) 
                 case 'T': case 't':
                     string readCommand = Console.ReadLine();
                     // string with two elements, list of reads and list of writes

@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+service TServerLServerService {
+	rpc Lease (LeaseRequest) returns (LeaseReply);
+}
+
+/* Request for a Lease by the TServer
+	- TManager identifier
+	- All DadInts included in Tx (Read and Write)
+*/
+message LeaseRequest {
+	string TManagerId = 1;
+	repeated DadInt dadInt = 2;
+}
+
+/* Reply by LeaseManagers to TServer
+	- Epoch
+	- List of leases
+*/
+message LeaseReply {
+	int32 Epoch = 1;
+	repeated Leases lease = 2;
+}
+
+/* Object Lease
+	- TManager that requested it
+	- Keys of the DadInts (account)
+*/
+message Leases {
+	string TManagerId = 1;
+	repeated string account = 2;
+}
+
+// ------------------------------------------------------------------------- //
+
+// TODO Repeated from the ClientToTServer.proto, not possible to import?
+/* Object DadInt
+	- Key is the string (account)
+	- Value is an int (value of the transaction)
+	*//*
+message DadInt {
+	string account = 1;
+	int32 value = 2;
+}*/

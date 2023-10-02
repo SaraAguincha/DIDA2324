@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+service PaxosService {
+	rpc Prepare (PrepareRequest) returns (PromiseReply);
+	rpc Accept (AcceptRequest) returns (AcceptedReply);
+}
+
+message PrepareRequest {}
+
+message PromiseReply {}
+
+message AcceptRequest {}
+
+message AcceptedReply {}

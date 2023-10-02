@@ -15,6 +15,8 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+	<Protobuf Include="..\protos\TServerToLServer.proto" GrpcServices="Both" Link="protos\TServerToLServer.proto" />
+    <Protobuf Include="..\protos\PaxosService.proto" GrpcServices="Both" Link="protos\PaxosService.proto" />
   </ItemGroup>
 
 </Project>

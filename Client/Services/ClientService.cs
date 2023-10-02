@@ -26,7 +26,8 @@ namespace Client.Services
         }
 
         // connection to the corresponding TServer
-        // TODO ((better way to do it))
+        // Client BindService
+        // TODO ((better way to do it)) currently hardcoded
         public void Start(string serverHostname, string clientHostname)
         {
             server = new Server

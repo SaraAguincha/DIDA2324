@@ -13,7 +13,7 @@ service ClientTServerService {
 */
 message TxSubmitRequest {
 	string clientId = 1;
-	repeated string account = 2;
+	repeated string key = 2;
 	repeated DadInt dadInts = 3;
 }
 
