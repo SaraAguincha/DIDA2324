@@ -97,7 +97,7 @@ namespace Utilities
 
             Dictionary<int, ServerProcessState>[] processStates = null;
 
-            // Read the configuration file and store the information in the lists
+            // Read the configuration file and store the information in the variables
             foreach (string line in File.ReadAllLines(configFile))
             {
                 string[] args = line.Split(" ");
@@ -129,8 +129,32 @@ namespace Utilities
                 }
                 else if (args[0] == "F")
                 {
-                    // TODO not sure if this is the best way to store the server process states but leaving this for now
-                    // TODO still incomplete
+                    /*
+                      In a F command:
+                       - The first integer indentifies the time slot it describes
+                       - It is followed by a sequence of (N)ormal or (C)rashed characters,
+                         one for each server process in the system
+                       - The line ends with a sequence of pairs indentifying suspected processes
+                         each pair includes the ids of the suspecting process and the suspected process,
+                         e.g. (A,B) means that process A suspects process B
+                       Example of F command: F 1 N N N N N N (TM1,TM2) (lease3,LM2)
+                    */
+                    int slot = Int32.Parse(args[1]);
+                    processStates[slot -1] = new Dictionary<int, ServerProcessState>();
+                    string[] state = null;
+                    string[][] suspects = null;
+                    int serverCountIndex = (tServers.Count + lServers.Count + 2);
+                    for (int i = 2; i < serverCountIndex; i++)
+                    {
+                        state[i - 2] = args[i];
+                    }
+                    for (int i = serverCountIndex; i < args.Length; i++)
+                    {
+                        suspects[i - serverCountIndex] = args[i].Trim('(', ')').Split(',');
+                    }
+                    // I have idea but takes a while and is too late and zzz time
+                    // Perhaps tie the numbers on the id to the index of the dictionary
+                    // Or might have to change the dictionary to string instead of int on the key
                 }
             }
             return new ServersConfig(tServers, lServers, start, duration, processStates);
