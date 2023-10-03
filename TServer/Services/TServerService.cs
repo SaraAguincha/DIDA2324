@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 // All of the services that the Tserver does
@@ -14,9 +15,10 @@ namespace TServer.Services
     public class TServerService
     {
         // TODO - store the clients connected to the server
-        // ((List)) of client id, channel and the service
-        private ClientTServerService.ClientTServerServiceClient client;
-        private GrpcChannel channel;
+
+        // Perhaps dictionaries are not the most efficient, but might help with debugging (hopefully C:)
+        private Dictionary<string, TServerLServerService.TServerLServerServiceClient> clientInstances = new Dictionary<string, TServerLServerService.TServerLServerServiceClient>();
+        private Dictionary<string, GrpcChannel> channels = new Dictionary<string, GrpcChannel>();
 
         // Server attributes
         private string TManagerId;
@@ -31,6 +33,13 @@ namespace TServer.Services
             this.TManagerId = TManagerId;
             this.TServers = TServers;
             this.LServers = LServers;
+            // Populate the dictionary of LServer connections
+            foreach (KeyValuePair<string, string> lserver in this.LServers)
+            {
+                GrpcChannel channel = GrpcChannel.ForAddress(lserver.Value);
+                channels.Add(lserver.Key, channel);
+                clientInstances.Add(lserver.Key, new TServerLServerService.TServerLServerServiceClient(channel));
+            }
         }
 
         /* Transaction submitted by client
@@ -74,10 +83,10 @@ namespace TServer.Services
 
             // TODO - Request a lease from all of the lease managers
             // not yet implemented
-            //LeaseRequest leaseRequest = new LeaseRequest { TManagerId = this.TManagerId, Key = { leaseKeys }};
-            
+            GrantLeaseRequest leaseRequest = new GrantLeaseRequest { TManagerId = this.TManagerId, Key = { leaseKeys }};
+
             // TODO
-            //LeaseReply leaseReply = RequestLease(leaseRequest);
+            GrantLeaseReply leaseReply = RequestLease(leaseRequest);
 
             // TODO - Lease verification
 
@@ -104,25 +113,25 @@ namespace TServer.Services
             return reply;
         }
 
-        public LeaseReply RequestLease(LeaseRequest request)
+        public GrantLeaseReply RequestLease(GrantLeaseRequest request)
         {
             // requests a lease from all of the LServers
-            List<LeaseReply> leaseReplies = new List<LeaseReply>();
+            List<GrantLeaseReply> leaseReplies = new List<GrantLeaseReply>();
             List<Task> tasks = new List<Task>();
             // for each LServer starts a task with a request
-            foreach (var lserver in this.LServers)
+            foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> clientInstance in this.clientInstances)
             {
                 // for each entry in LServers, run a task with the request for a lease
                 Task t = Task.Run(() =>
                 {
-
+                    clientInstance.Value.GrantLeaseAsync(request);
                 });
                 tasks.Add(t);
             }
             // wait for the majority of the tasks to get a response
             // sort what it receives and return one reply to the function Transaction
 
-            LeaseReply reply = new LeaseReply();
+            GrantLeaseReply reply = new GrantLeaseReply();
 
             return reply;
         }

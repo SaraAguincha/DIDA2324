@@ -1,5 +1,7 @@
 ﻿using Grpc.Core;
 using Grpc.Net.Client;
+using LServer.Services;
+using Protos;
 using System.Text.RegularExpressions;
 
 // Lease Server Main
@@ -13,24 +15,43 @@ using System.Text.RegularExpressions;
         // additional information is needed:
         //  - number of processes running and respective ids and URL
 
-        string arguments = Console.ReadLine();          //unnecessary when script implemented
-        string[] initialArgs = arguments.Split(" ");    //unnecessary when script implemented
+        /*
+       string arguments = Console.ReadLine();          //unnecessary when script implemented
+       string[] initialArgs = arguments.Split(" ");    //unnecessary when script implemented
 
 
-        string LManagerId = initialArgs[0];             //args[0] when script implemented
+       string LManagerId = initialArgs[0];             //args[0] when script implemented
 
-        string urlPattern = @"http://([^:/]+):(\d+)";
-        Match match = Regex.Match(initialArgs[1], urlPattern);
+       string urlPattern = @"http://([^:/]+):(\d+)";
+       Match match = Regex.Match(initialArgs[1], urlPattern);
 
-        string hostname = match.Groups[1].Value;            // group 1 will contain the IP address
-        int port = Int32.Parse(match.Groups[2].Value);      // group 2 will contain the port
+       string hostname = match.Groups[1].Value;            // group 1 will contain the IP address
+       int port = Int32.Parse(match.Groups[2].Value);      // group 2 will contain the port
 
-        // after the server information, it receives the other processes information
-        // TODO - TManagers List and LManagers List
+       // after the server information, it receives the other processes information
+       // TODO - TManagers List and LManagers List
 
+
+       ServerPort serverPort;
+       serverPort = new ServerPort(hostname, port, ServerCredentials.Insecure);
+        */
+
+
+        // placeholder information  ----------------------------------------------
+        string hostname = "localhost";
+        int port = 10200;
+        string lManagerId = "LM1";
+
+        // ------------------------------------------------------------------------
 
         ServerPort serverPort;
         serverPort = new ServerPort(hostname, port, ServerCredentials.Insecure);
+
+        // all the functions of the LServer will be done here
+        LServerService lServerService = new LServerService(lManagerId);
+
+        // all of the function call async related to clients, tservers and lservers
+        LServerService_TServer tServerService = new LServerService_TServer(lServerService);
 
         // Bind all the services:
         // Client Services          (Client Commands)   -> currently the only one
@@ -38,7 +59,7 @@ using System.Text.RegularExpressions;
         // LManagerServer Service   (Leases requests)
         Server server = new Server
         {
-            //Services = { LServerTServerService.BindService(new LserverServiceTServer()) },
+            Services = { TServerLServerService.BindService(tServerService) },
             Ports = { serverPort }
         };
 

@@ -37,7 +37,7 @@ class Program
         Dictionary<string, string> Tservers = new Dictionary<string, string>();
         Dictionary<string, string> Lservers = new Dictionary<string, string>();
         Lservers.Add("LM1", "http://localhost:10200");
-        Lservers.Add("LM2", "http://localhost:10201");
+        //Lservers.Add("LM2", "http://localhost:10201");
 
         // ------------------------------------------------------------------------
 

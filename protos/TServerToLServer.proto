@@ -3,14 +3,14 @@ syntax = "proto3";
 package protos;
 
 service TServerLServerService {
-	rpc Lease (LeaseRequest) returns (LeaseReply);
+	rpc GrantLease (GrantLeaseRequest) returns (GrantLeaseReply);
 }
 
 /* Request for a Lease by the TServer
 	- TManager identifier
 	- All DadInts included in Tx (Read and Write)
 */
-message LeaseRequest {
+message GrantLeaseRequest {
 	string TManagerId = 1;
 	repeated string key = 2;
 }
@@ -19,16 +19,16 @@ message LeaseRequest {
 	- Epoch
 	- List of leases
 */
-message LeaseReply {
+message GrantLeaseReply {
 	int32 Epoch = 1;
-	repeated Leases lease = 2;
+	repeated Lease leases = 2;
 }
 
 /* Object Lease
 	- TManager that requested it
-	- Keys of the DadInts (account)
+	- Key of the DadInt (account)
 */
-message Leases {
+message Lease {
 	string TManagerId = 1;
-	repeated string key = 2;
+	string key = 2;
 }
