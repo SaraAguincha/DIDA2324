@@ -3,6 +3,7 @@ using Google.Protobuf;
 using Google.Protobuf.Collections;
 using Grpc.Core;
 using Grpc.Net.Client;
+using Protos;
 using System.Text.RegularExpressions;
 
 // Client
@@ -109,7 +110,7 @@ class Program
                 // TODO, not sure what the key for this command is, not specified
                 case 'S': case 's':
                     bool statReply = client.Status();
-                    Console.WriteLine("server responded with: " + statReply);
+                    Console.WriteLine("server responded with: " + statReply + "\n");
                     break;
                 default:
                     Console.WriteLine("no command found :(");

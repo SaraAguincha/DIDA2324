@@ -1,6 +1,7 @@
 ﻿using Google.Protobuf.Collections;
 using Grpc.Core;
 using Grpc.Net.Client;
+using Protos;
 using System;
 using System.Collections.Generic;
 using System.Linq;

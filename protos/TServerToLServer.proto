@@ -1,5 +1,8 @@
 syntax = "proto3";
 
+package protos;
+import "ClientToTServer.proto";
+
 service TServerLServerService {
 	rpc Lease (LeaseRequest) returns (LeaseReply);
 }
@@ -10,7 +13,7 @@ service TServerLServerService {
 */
 message LeaseRequest {
 	string TManagerId = 1;
-	repeated DadInt dadInt = 2;
+	repeated protos.DadInt dadInt = 2;
 }
 
 /* Reply by LeaseManagers to TServer
@@ -30,15 +33,3 @@ message Leases {
 	string TManagerId = 1;
 	repeated string account = 2;
 }
-
-// ------------------------------------------------------------------------- //
-
-// TODO Repeated from the ClientToTServer.proto, not possible to import?
-/* Object DadInt
-	- Key is the string (account)
-	- Value is an int (value of the transaction)
-	*//*
-message DadInt {
-	string account = 1;
-	int32 value = 2;
-}*/

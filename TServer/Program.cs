@@ -1,5 +1,6 @@
 ﻿using Grpc.Core;
 using Grpc.Net.Client;
+using Protos;
 using System.Text.RegularExpressions;
 using TServer.Services;
 
@@ -28,6 +29,7 @@ class Program
         int port = Int32.Parse(match.Groups[2].Value);      // group 2 will contain the port
  
         */
+
         // placeholder information  ----------------------------------------------
         string hostname = "localhost";
         int port = 10001;
@@ -43,12 +45,12 @@ class Program
         ServerPort serverPort;
         serverPort = new ServerPort(hostname, port, ServerCredentials.Insecure);
 
-        TServerServiceClient clientService = new TServerServiceClient(TManagerId, Tservers, Lservers);
+        // all the functions of the TServer will be done here
+        TServerService TServerService = new TServerService(TManagerId, Tservers, Lservers);
 
-        // Bind all the services:
-        // Client Services          (Client Commands)   -> currently the only one
-        // TManagerServer Services  (Info disclosure)
-        // LManagerServer Service   (Leases requests)
+        // all of the function call async related to clients, tservers and lservers
+        TServerService_Client clientService = new TServerService_Client(TServerService);
+
         Server server = new Server
         {
             Services = { ClientTServerService.BindService(clientService) },

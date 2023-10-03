@@ -1,16 +1,17 @@
 ﻿using Google.Protobuf.Collections;
 using Grpc.Core;
 using Grpc.Net.Client;
+using Protos;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-// Client related. Transactions and Status commands
+// All of the services that the Tserver does
 namespace TServer.Services
 {
-    public class TServerServiceClient : ClientTServerService.ClientTServerServiceBase
+    public class TServerService
     {
         // TODO - store the clients connected to the server
         // ((List)) of client id, channel and the service
@@ -19,18 +20,18 @@ namespace TServer.Services
 
         // Server attributes
         private string TManagerId;
-        private Dictionary<string,string> LServers;
+        private Dictionary<string, string> LServers;
         private Dictionary<string, string> TServers;
+        //private Dictionary<string, int> dadInt;
 
 
         // set all the server information from config
-        public TServerServiceClient(string TManagerId, Dictionary<string, string> TServers, Dictionary<string,string> LServers) 
+        public TServerService(string TManagerId, Dictionary<string, string> TServers, Dictionary<string, string> LServers)
         {
             this.TManagerId = TManagerId;
             this.TServers = TServers;
             this.LServers = LServers;
         }
-
 
         /* Transaction submitted by client
          *      - clientID
@@ -67,7 +68,7 @@ namespace TServer.Services
 
             foreach (DadInt dadInt in writes)
             {
-                if(!leaseKeys.Contains(dadInt.Key))
+                if (!leaseKeys.Contains(dadInt.Key))
                     leaseKeys.Add(dadInt.Key);
             }
 
@@ -75,8 +76,12 @@ namespace TServer.Services
             // TODO
 
 
+
             // currently responds with the dadints from writes
             TxSubmitReply reply = new TxSubmitReply { DadInts = { writes } };
+
+            // TODO before replying broadcast to the other TServers and update the DadInts values
+
             return reply;
         }
 
@@ -94,29 +99,5 @@ namespace TServer.Services
 
             return reply;
         }
-
-        // ----------------------------------------------------------
-        // TODO - separate into a different file for easier reading
-        // calls the proto functions asyncronously
-        public override Task<StatusReply> Status(StatusRequest request, ServerCallContext context)
-        {
-            Console.WriteLine("Deadline: " + context.Deadline);
-            Console.WriteLine("Host: " + context.Host);
-            Console.WriteLine("Method: " + context.Method);
-            Console.WriteLine("Peer: " + context.Peer);
-
-            return Task.FromResult(State(request));
-        }
-
-        public override Task<TxSubmitReply> TxSubmit(TxSubmitRequest request, ServerCallContext context)
-        {
-            Console.WriteLine("Deadline: " + context.Deadline);
-            Console.WriteLine("Host: " + context.Host);
-            Console.WriteLine("Method: " + context.Method);
-            Console.WriteLine("Peer: " + context.Peer);
-
-            return Task.FromResult(Transaction(request));
-        }
-
     }
 }

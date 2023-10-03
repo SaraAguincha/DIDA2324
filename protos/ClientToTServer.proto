@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+package protos;
+
 // Commands that the client can use
 service ClientTServerService {
 	rpc TxSubmit (TxSubmitRequest) returns (TxSubmitReply);
@@ -26,15 +28,6 @@ message TxSubmitReply {
 	repeated DadInt dadInts = 1;
 }
 
-/* Object DadInt
-	- Key is the string (account)
-	- Value is an int (value of the transaction)
-*/
-message DadInt {
-	string key = 1;
-	int32 val = 2;
-}
-
 // Requests the states of all the nodes in the system
 message StatusRequest {
 	bool ok = 1;
@@ -45,4 +38,13 @@ message StatusRequest {
 message StatusReply {
 	//repeated string status = 1;
 	bool status = 1;
+}
+
+/* Object DadInt
+	- Key is the string (account)
+	- Value is an int (value of the transaction)
+*/
+message DadInt {
+	string key = 1;
+	int32 val = 2;
 }
