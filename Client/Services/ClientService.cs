@@ -31,11 +31,11 @@ namespace Client.Services
         }
 
         // Client Commands
-        // TODO - change for async, catch exceptions
-        public RepeatedField<DadInt> TxSubmit(List<string> reads, List<DadInt> writes)
+        // Asynchronous TxSubmit call
+        public async Task<RepeatedField<DadInt>> TxSubmit(List<string> reads, List<DadInt> writes)
         {
             TxSubmitRequest request = new TxSubmitRequest { ClientId = this.clientId, Key = { reads }, DadInts = { writes } };
-            TxSubmitReply reply = client.TxSubmit(request);
+            TxSubmitReply reply = await client.TxSubmitAsync(request);
 
             return reply.DadInts;
         }

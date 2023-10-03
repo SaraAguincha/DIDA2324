@@ -90,7 +90,7 @@ class Program
                     //Console.WriteLine("Reads: " + reads.Count + "\nWrites: " + writes.Count);
                     //Console.WriteLine(reads[0] + "\n" + reads[1]);
                     //Console.WriteLine(writes[0].Key + "\n" + writes[1].Key);
-                    RepeatedField<DadInt> txReply = client.TxSubmit(reads, writes);
+                    RepeatedField<DadInt> txReply = client.TxSubmit(reads, writes).Result;
 
                     foreach (DadInt reply in txReply)
                     {
