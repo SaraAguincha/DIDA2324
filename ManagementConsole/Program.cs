@@ -20,6 +20,10 @@ namespace ManagementConsole
                 Console.WriteLine("Configuration file not found.");
                 return;
             }
+            
+            //Console.WriteLine("Waiting for input...");
+            //Console.ReadKey();
+            //ServersConfig config = Resources.ParseConfigFile();
 
             // TODO - read the configuration file and start the processes for each line starting with a "P" (work in progress)
             foreach (string line in File.ReadAllLines(configFile))
