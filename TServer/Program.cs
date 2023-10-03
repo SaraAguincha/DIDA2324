@@ -14,6 +14,7 @@ class Program
         // additional information is needed:
         //  - number of processes running and respective ids and URL
 
+        /*  WHEN CONFIG WORKS
         string arguments = Console.ReadLine();          //unnecessary when script implemented
         string[] initialArgs = arguments.Split(" ");    //unnecessary when script implemented
 
@@ -26,12 +27,23 @@ class Program
         string hostname = match.Groups[1].Value;            // group 1 will contain the IP address
         int port = Int32.Parse(match.Groups[2].Value);      // group 2 will contain the port
  
-        // after the server information, it receives the other processes information
-        // TODO - TManagers List and LManagers List
+        */
+        // placeholder information  ----------------------------------------------
+        string hostname = "localhost";
+        int port = 10001;
+        string TManagerId = "TM1";
+        Dictionary<string, string> Tservers = new Dictionary<string, string>();
+        Dictionary<string, string> Lservers = new Dictionary<string, string>();
+        Lservers.Add("LM1", "http://localhost:10200");
+        Lservers.Add("LM2", "http://localhost:10201");
+
+        // ------------------------------------------------------------------------
 
 
         ServerPort serverPort;
         serverPort = new ServerPort(hostname, port, ServerCredentials.Insecure);
+
+        TServerServiceClient clientService = new TServerServiceClient(TManagerId, Tservers, Lservers);
 
         // Bind all the services:
         // Client Services          (Client Commands)   -> currently the only one
@@ -39,7 +51,7 @@ class Program
         // LManagerServer Service   (Leases requests)
         Server server = new Server
         {
-            Services = { ClientTServerService.BindService(new TServerServiceClient()) },
+            Services = { ClientTServerService.BindService(clientService) },
             Ports = { serverPort }
         };
 

@@ -1,5 +1,6 @@
 ﻿using Client.Services;
 using Google.Protobuf;
+using Google.Protobuf.Collections;
 using Grpc.Core;
 using Grpc.Net.Client;
 using System.Text.RegularExpressions;
@@ -9,16 +10,35 @@ class Program
 {
     public static void Main(string[] args)
     {
-        // TODO - definir o que fazer em relacao ao url dos clients, random, hardcoded? e conneccao com TServer
+        // TODO - add properties from config instead of placeholders
 
-        // placeholder client - TServer connection
-        // private readonly GrpcChannel channel;
-        const string clientUrl = "http://localhost:10000";
+
+        // Placeholder client information
+        const string serverHostname = "localhost";
+        const int serverPort = 10001;
         const string serverUrl = "http://localhost:10001";
-        ClientService client;
 
-        client = new ClientService(serverUrl, clientUrl);
-        client.Start(serverUrl, clientUrl);
+        string clientHostname = "localhost";
+        int clientPort = 15000;                 // random port in the future
+        string clientUrl = $"http://{clientHostname}:{clientPort.ToString()}";
+        const string clientId = "c2";
+
+        
+        
+        ClientService client;
+        client = new ClientService(clientId, serverUrl, clientUrl);
+
+        // TODO - how to proceed when TServer crashes?
+        client.server = new Server
+        {
+            Services = { ClientTServerService.BindService(client) },
+            Ports = { new ServerPort(clientHostname, clientPort, ServerCredentials.Insecure) }
+
+        };
+        client.server.Start();
+
+
+
         Console.WriteLine("Client ready to make requests...");
         AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
         while (true)
@@ -69,14 +89,27 @@ class Program
                     //Console.WriteLine("Reads: " + reads.Count + "\nWrites: " + writes.Count);
                     //Console.WriteLine(reads[0] + "\n" + reads[1]);
                     //Console.WriteLine(writes[0].Key + "\n" + writes[1].Key);
+                    RepeatedField<DadInt> txReply = client.TxSubmit(reads, writes);
+
+                    foreach (DadInt reply in txReply)
+                    {
+                        // when the transaction is not realised, a DadInt with key == abort is returned
+                        if (reply.Key == "abort")
+                        {
+                            Console.WriteLine("Something went wrong during the transaction.. Please repeat again.");
+                            break;
+                        } 
+                        Console.WriteLine($"DadInt with Id: {reply.Key}");
+                        Console.WriteLine($"Has Value: {reply.Val}");
+                    }
 
                     break;
 
                 // Status command
                 // TODO, not sure what the key for this command is, not specified
                 case 'S': case 's':
-                    bool reply = client.Status();
-                    Console.WriteLine("server responded with: " + reply);
+                    bool statReply = client.Status();
+                    Console.WriteLine("server responded with: " + statReply);
                     break;
                 default:
                     Console.WriteLine("no command found :(");

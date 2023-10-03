@@ -19,11 +19,17 @@ namespace TServer.Services
 
         // Server attributes
         private string TManagerId;
-        private List<string> LManagersIds;
+        private Dictionary<string,string> LServers;
+        private Dictionary<string, string> TServers;
 
 
-
-        public TServerServiceClient() { }
+        // set all the server information from config
+        public TServerServiceClient(string TManagerId, Dictionary<string, string> TServers, Dictionary<string,string> LServers) 
+        {
+            this.TManagerId = TManagerId;
+            this.TServers = TServers;
+            this.LServers = LServers;
+        }
 
 
         /* Transaction submitted by client
@@ -39,11 +45,12 @@ namespace TServer.Services
         {
             // TODO - a way to not repeat this verification every time in every command for every client,
             // right now it only works for one client.. Choose one way to store the clients/channels
+            /* is this necessary ??
             if (client == null)
             {
                 this.channel = GrpcChannel.ForAddress("http://localhost:10000");
                 this.client = new ClientTServerService.ClientTServerServiceClient(channel);
-            }
+            }*/
 
             // prepares the request for the Lease Manager
             RepeatedField<string> reads = request.Key;
@@ -68,18 +75,19 @@ namespace TServer.Services
             // TODO
 
 
-
-            TxSubmitReply reply = new TxSubmitReply();
+            // currently responds with the dadints from writes
+            TxSubmitReply reply = new TxSubmitReply { DadInts = { writes } };
             return reply;
         }
 
 
         public StatusReply State(StatusRequest request)
         {
+            /* TODO - is this necessary ??
             if (client == null) {
                 this.channel = GrpcChannel.ForAddress("http://localhost:10000");
                 this.client = new ClientTServerService.ClientTServerServiceClient(channel);
-            }
+            }*/
 
             // TODO - use a broadcast algorithm to contact the other servers (2PC p.e)
             StatusReply reply = new StatusReply { Status = true };
@@ -89,13 +97,14 @@ namespace TServer.Services
 
         // ----------------------------------------------------------
         // TODO - separate into a different file for easier reading
-        public override Task<StatusReply> Status(
-            StatusRequest request, ServerCallContext context)
+        // calls the proto functions asyncronously
+        public override Task<StatusReply> Status(StatusRequest request, ServerCallContext context)
         {
             Console.WriteLine("Deadline: " + context.Deadline);
             Console.WriteLine("Host: " + context.Host);
             Console.WriteLine("Method: " + context.Method);
             Console.WriteLine("Peer: " + context.Peer);
+
             return Task.FromResult(State(request));
         }
 
@@ -105,6 +114,7 @@ namespace TServer.Services
             Console.WriteLine("Host: " + context.Host);
             Console.WriteLine("Method: " + context.Method);
             Console.WriteLine("Peer: " + context.Peer);
+
             return Task.FromResult(Transaction(request));
         }
 

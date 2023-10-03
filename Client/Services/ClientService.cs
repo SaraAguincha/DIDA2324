@@ -1,4 +1,5 @@
-﻿using Grpc.Core;
+﻿using Google.Protobuf.Collections;
+using Grpc.Core;
 using Grpc.Net.Client;
 using System;
 using System.Collections.Generic;
@@ -12,38 +13,38 @@ namespace Client.Services
     {
         private readonly GrpcChannel channel;
         private readonly ClientTServerService.ClientTServerServiceClient client;
-        private Server server;
         private string hostname;
+        private string clientId;
+        public Server server;
 
-        public ClientService(string serverHostname, string clientHostname)
+        // TODO - add and set the other necessary information, clientId, TServers
+        public ClientService(string clientId, string serverHostname, string clientHostname)
         {
-            this.hostname = clientHostname;
-            // setup the client side
-
             AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
+
+            // setup the client side
+            this.hostname = clientHostname;
+            this.clientId = clientId;
             channel = GrpcChannel.ForAddress(serverHostname);
             client = new ClientTServerService.ClientTServerServiceClient(channel);
         }
 
-        // connection to the corresponding TServer
-        // Client BindService
-        // TODO ((better way to do it)) currently hardcoded
-        public void Start(string serverHostname, string clientHostname)
+        // Client Commands
+        // TODO - change for async, catch exceptions
+        public RepeatedField<DadInt> TxSubmit(List<string> reads, List<DadInt> writes)
         {
-            server = new Server
-            {
-                Services = { ClientTServerService.BindService(new ClientService(serverHostname, clientHostname)) },
-                Ports = { new ServerPort("localhost", 10000, ServerCredentials.Insecure) }
+            TxSubmitRequest request = new TxSubmitRequest { ClientId = this.clientId, Key = { reads }, DadInts = { writes } };
+            TxSubmitReply reply = client.TxSubmit(request);
 
-            };
-            server.Start();
+            return reply.DadInts;
         }
 
-        // Client Commands
+
+        // TODO - change for async, catch exceptions
         public bool Status()
         {
             StatusRequest request = new StatusRequest { Ok = true };
-            StatusReply reply = client.Status(new StatusRequest(request));
+            StatusReply reply = client.Status(request);
 
             return reply.Status;
         }
