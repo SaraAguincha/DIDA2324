@@ -72,10 +72,14 @@ namespace TServer.Services
                     leaseKeys.Add(dadInt.Key);
             }
 
-            // Request a lease from all of the lease managers
+            // TODO - Request a lease from all of the lease managers
+            // not yet implemented
+            //LeaseRequest leaseRequest = new LeaseRequest { TManagerId = this.TManagerId, Key = { leaseKeys }};
+            
             // TODO
+            //LeaseReply leaseReply = RequestLease(leaseRequest);
 
-
+            // TODO - Lease verification
 
             // currently responds with the dadints from writes
             TxSubmitReply reply = new TxSubmitReply { DadInts = { writes } };
@@ -99,5 +103,29 @@ namespace TServer.Services
 
             return reply;
         }
+
+        public LeaseReply RequestLease(LeaseRequest request)
+        {
+            // requests a lease from all of the LServers
+            List<LeaseReply> leaseReplies = new List<LeaseReply>();
+            List<Task> tasks = new List<Task>();
+            // for each LServer starts a task with a request
+            foreach (var lserver in this.LServers)
+            {
+                // for each entry in LServers, run a task with the request for a lease
+                Task t = Task.Run(() =>
+                {
+
+                });
+                tasks.Add(t);
+            }
+            // wait for the majority of the tasks to get a response
+            // sort what it receives and return one reply to the function Transaction
+
+            LeaseReply reply = new LeaseReply();
+
+            return reply;
+        }
+
     }
 }

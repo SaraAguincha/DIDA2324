@@ -1,7 +1,6 @@
 syntax = "proto3";
 
 package protos;
-import "ClientToTServer.proto";
 
 service TServerLServerService {
 	rpc Lease (LeaseRequest) returns (LeaseReply);
@@ -13,7 +12,7 @@ service TServerLServerService {
 */
 message LeaseRequest {
 	string TManagerId = 1;
-	repeated protos.DadInt dadInt = 2;
+	repeated string key = 2;
 }
 
 /* Reply by LeaseManagers to TServer
@@ -31,5 +30,5 @@ message LeaseReply {
 */
 message Leases {
 	string TManagerId = 1;
-	repeated string account = 2;
+	repeated string key = 2;
 }

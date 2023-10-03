@@ -9,7 +9,7 @@ using System.Text.RegularExpressions;
     {
         // parsing according to config file
         // a TServer will be given the following information:
-        // "LM2 L "http://localhost:10008"
+        // "LM2 L "http://localhost:10200"
         // additional information is needed:
         //  - number of processes running and respective ids and URL
 
