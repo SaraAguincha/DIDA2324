@@ -38,14 +38,19 @@ using System.Text.RegularExpressions;
 
 
         // placeholder information  ----------------------------------------------
-        string hostname = "localhost";
-        int port = 10200;
+        //string hostname = "localhost";
+        //int port = 10200;
         string lManagerId = "LM1";
         Dictionary<string, string> Lservers = new Dictionary<string, string>();
         Lservers.Add("LM3", "http://localhost:10300");
         Lservers.Add("LM4", "http://localhost:10400");
 
         // ------------------------------------------------------------------------
+
+        // Server configuration
+        string processId = args[0];
+        string hostname = args[1];
+        int port = Int32.Parse(args[2]);
 
         ServerPort serverPort;
         serverPort = new ServerPort(hostname, port, ServerCredentials.Insecure);
