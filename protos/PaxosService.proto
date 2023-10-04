@@ -6,24 +6,24 @@ service PaxosService {
 }
 
 message PrepareRequest {
-	int32 slot = 1;
+	int32 epoch = 1;
 	int32 leaderId = 2;
 }
 
 message PromiseReply {
-	int32 slot = 1;
+	int32 epoch = 1;
 	int32 value = 2;
 	int32 readTimestamp = 3;
 }
 
 message AcceptRequest {
-	int32 slot = 1;
+	int32 epoch = 1;
 	int32 leaderId = 2;
 	int32 value = 3;
 }
 
 message AcceptedReply {
-	int32 slot = 1;
+	int32 epoch = 1;
 	int32 value = 2;
 	int32 writeTimestamp = 3;
 }
