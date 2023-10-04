@@ -57,6 +57,37 @@ namespace ManagementConsole
             }
         }
 
+        // Method to build a project
+        static int RunDotnetBuild(string solutionDir, string projectFile, string configuration)
+        {
+            // Use the dotnet build command to build the project
+            Process process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "dotnet",
+                    Arguments = $"build \"{projectFile}\" -c {configuration}",
+                    WorkingDirectory = solutionDir,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+
+            process.Start();
+            process.WaitForExit();
+
+            // Print the build output to the console
+            string output = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
+
+            Console.WriteLine(output);
+            Console.WriteLine(error);
+
+            return process.ExitCode;
+        }
+
         static void Main(string[] args)
         {
             // Gets the full path of the configuration file
@@ -64,12 +95,42 @@ namespace ManagementConsole
             string configFile = solutionDir + "\\ManagementConsole\\configuration_sample.txt";
 
             // Checks if the configuration file exists
-            if(!File.Exists(configFile))
+            if (!File.Exists(configFile))
             {
                 Console.WriteLine("Configuration file not found.");
                 return;
             }
 
+            // Gets the full path of the project files
+            string clientProjectFile = solutionDir + "\\Client\\Client.csproj";
+            string tServerProjectFile = solutionDir + "\\TServer\\TServer.csproj";
+            string lServerProjectFile = solutionDir + "\\LServer\\LServer.csproj";
+            string buildConfiguration = "Debug";
+
+            // Builds the projects
+            int exitCodeClient = RunDotnetBuild(solutionDir, clientProjectFile, buildConfiguration);
+            int exitCodeTServer = RunDotnetBuild(solutionDir, tServerProjectFile, buildConfiguration);
+            int exitCodeLServer = RunDotnetBuild(solutionDir, lServerProjectFile, buildConfiguration);
+
+            // Checks if the builds were successful
+            if (exitCodeClient != 0)
+            {
+                Console.WriteLine("Client build failed. Check for build errors before running the executable.");
+                return;
+            }
+            else if (exitCodeTServer != 0)
+            {
+                Console.WriteLine("TServer build failed. Check for build errors before running the executable.");
+                return;
+            }
+            else if (exitCodeLServer != 0)
+            {
+                Console.WriteLine("LServer build failed. Check for build errors before running the executable.");
+                return;
+            }
+            Console.WriteLine("Build successful.");
+
+            // Parses the configuration file and starts the processes
             foreach (string line in File.ReadAllLines(configFile))
             {
                 string[] arguments = line.Split(" ");
@@ -78,6 +139,7 @@ namespace ManagementConsole
                     StartNewProcess(arguments);
                 }
             }
+
             // Give the choice to the user to stop all the processes or to exit the management console
             Console.WriteLine("Press 's' to stop all processes or 'q' to quit the management console.");
             while (true)
@@ -100,7 +162,7 @@ namespace ManagementConsole
                         {
                             process.Kill();
                         }
-                        Console.WriteLine("");
+                        Console.WriteLine("\nStopped all processes.");
                         break;
                     case 'q':
                         return;
