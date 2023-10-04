@@ -62,7 +62,7 @@ namespace LServer.Services
         /*  Paxos: Prepare
          *  Sends a prepare request to all the other servers
          */
-        public PromiseReply Prepare(PrepareRequest request)
+        public PromiseReply PaxosPrepare(PrepareRequest request)
         {
             List<PromiseReply> promisesReplies = new List<PromiseReply>();
             List<Task> tasks = new List<Task>();

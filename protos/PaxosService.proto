@@ -7,7 +7,8 @@ service PaxosService {
 
 message PrepareRequest {
 	int32 epoch = 1;
-	int32 leaderId = 2;
+	int32 roundId = 2;
+	int32 proposerId = 3;
 }
 
 message PromiseReply {
@@ -18,7 +19,7 @@ message PromiseReply {
 
 message AcceptRequest {
 	int32 epoch = 1;
-	int32 leaderId = 2;
+	int32 roundId = 2;
 	int32 value = 3;
 }
 
