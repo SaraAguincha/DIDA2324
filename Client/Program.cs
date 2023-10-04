@@ -16,15 +16,19 @@ class Program
 
         // Placeholder client information
         const string serverHostname = "localhost";
-        const int serverPort = 10001;
-        const string serverUrl = "http://localhost:10001";
+        const int serverPort = 10000;
+        char lastChar = args[0][args[0].Length - 1];
+        string serverUrl = $"http://1.2.3.4:1000{lastChar}";
 
         string clientHostname = "localhost";
-        int clientPort = 15000;                 // random port in the future
+        Random random = new Random();
+        int clientPort = random.Next(11000, 15001);                 // random port in the future
         string clientUrl = $"http://{clientHostname}:{clientPort.ToString()}";
         const string clientId = "c2";
 
-        
+        // Client configuration
+        string processId = args[0];
+        string script = args[1];
         
         ClientService client;
         client = new ClientService(clientId, serverUrl, clientUrl);

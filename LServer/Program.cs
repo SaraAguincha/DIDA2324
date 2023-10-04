@@ -41,6 +41,9 @@ using System.Text.RegularExpressions;
         string hostname = "localhost";
         int port = 10200;
         string lManagerId = "LM1";
+        Dictionary<string, string> Lservers = new Dictionary<string, string>();
+        Lservers.Add("LM3", "http://localhost:10300");
+        Lservers.Add("LM4", "http://localhost:10400");
 
         // ------------------------------------------------------------------------
 
@@ -48,7 +51,7 @@ using System.Text.RegularExpressions;
         serverPort = new ServerPort(hostname, port, ServerCredentials.Insecure);
 
         // all the functions of the LServer will be done here
-        LServerService lServerService = new LServerService(lManagerId);
+        LServerService lServerService = new LServerService(lManagerId, Lservers);
 
         // all of the function call async related to clients, tservers and lservers
         LServerService_TServer tServerService = new LServerService_TServer(lServerService);

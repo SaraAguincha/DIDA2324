@@ -31,8 +31,8 @@ class Program
         */
 
         // placeholder information  ----------------------------------------------
-        string hostname = "localhost";
-        int port = 10001;
+        //string hostname = "localhost";
+        //int port = 10001;
         string TManagerId = "TM1";
         Dictionary<string, string> Tservers = new Dictionary<string, string>();
         Dictionary<string, string> Lservers = new Dictionary<string, string>();
@@ -41,6 +41,14 @@ class Program
 
         // ------------------------------------------------------------------------
 
+        // Server configuration
+        string processId = args[0];
+        string hostname = args[1];
+        int port = Int32.Parse(args[2]);
+
+        // Server id in int format for Paxos
+        char lastChar = processId[processId.Length - 1];
+        int serverId = Int32.Parse(lastChar.ToString());
 
         ServerPort serverPort;
         serverPort = new ServerPort(hostname, port, ServerCredentials.Insecure);
