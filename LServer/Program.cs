@@ -7,6 +7,14 @@ using System.Text.RegularExpressions;
 // Lease Server Main
     class Program
 {
+    // Current epoch (has to be global variable)
+    private static int epoch = 0;
+    private const int DELTA = 10000;
+    static void NextEpoch(object state)
+    {
+        epoch++;
+        Console.WriteLine("Advanced to epoch number " + epoch.ToString());
+    }
     public static void Main(string[] args)
     {
         // parsing according to config file
@@ -41,7 +49,11 @@ using System.Text.RegularExpressions;
         //string hostname = "localhost";
         //int port = 10200;
         //string lManagerId = "LM1";
-        Dictionary<string, string> Lservers = new Dictionary<string, string>();
+        Dictionary<string, string> lServers = new Dictionary<string, string>();
+        // TODO - Hardcoded
+        lServers.Add("LM1", "http://localhost:20001");
+        lServers.Add("LM2", "http://localhost:20002");
+        lServers.Add("LM3", "http://localhost:20003");
 
         // ------------------------------------------------------------------------
 
@@ -54,7 +66,7 @@ using System.Text.RegularExpressions;
         serverPort = new ServerPort(hostname, port, ServerCredentials.Insecure);
 
         // all the functions of the LServer will be done here
-        LServerService lServerService = new LServerService(processId, Lservers);
+        LServerService lServerService = new LServerService(processId, lServers);
 
         // all of the function call async related to clients, tservers and lservers
         LServerService_TServer tServerService = new LServerService_TServer(lServerService);
@@ -73,6 +85,11 @@ using System.Text.RegularExpressions;
 
         //Configuring HTTP for client connections in Register method
         AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
+
+        // Timer related activities
+        TimerCallback timerCallback = NextEpoch;
+        Timer timer = new Timer(timerCallback, null, DELTA, DELTA);
+        Console.WriteLine("Timer started at " + DateTime.Now);
 
         Console.WriteLine("Server is running in the port: " + port + " and is ready to accept requests...");
         while (true) ;
