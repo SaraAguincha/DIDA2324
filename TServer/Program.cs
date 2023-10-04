@@ -33,11 +33,12 @@ class Program
         // placeholder information  ----------------------------------------------
         //string hostname = "localhost";
         //int port = 10001;
-        string TManagerId = "TM1";
+        //string TManagerId = "TM1";
         Dictionary<string, string> Tservers = new Dictionary<string, string>();
         Dictionary<string, string> Lservers = new Dictionary<string, string>();
-        Lservers.Add("LM1", "http://localhost:10200");
-        //Lservers.Add("LM2", "http://localhost:10201");
+        Lservers.Add("LM1", "http://localhost:20001");
+        Lservers.Add("LM2", "http://localhost:20002");
+        Lservers.Add("LM3", "http://localhost:20003");
 
         // ------------------------------------------------------------------------
 
@@ -54,7 +55,7 @@ class Program
         serverPort = new ServerPort(hostname, port, ServerCredentials.Insecure);
 
         // all the functions of the TServer will be done here
-        TServerService TServerService = new TServerService(TManagerId, Tservers, Lservers);
+        TServerService TServerService = new TServerService(processId, Tservers, Lservers);
 
         // all of the function call async related to clients, tservers and lservers
         TServerService_Client clientService = new TServerService_Client(TServerService);

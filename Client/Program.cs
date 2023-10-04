@@ -18,7 +18,8 @@ class Program
         const string serverHostname = "localhost";
         const int serverPort = 10000;
         char lastChar = args[0][args[0].Length - 1];
-        string serverUrl = $"http://1.2.3.4:1000{lastChar}";
+        string serverUrl = $"http://127.0.0.1:1000{lastChar}";
+        Console.WriteLine("Connecting to: " + serverUrl);
 
         string clientHostname = "localhost";
         Random random = new Random();
