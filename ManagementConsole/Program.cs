@@ -70,13 +70,43 @@ namespace ManagementConsole
                 return;
             }
 
-            // TODO - read the configuration file and start the processes for each line starting with a "P" (work in progress)
             foreach (string line in File.ReadAllLines(configFile))
             {
                 string[] arguments = line.Split(" ");
                 if (arguments[0] == "P")
                 {
                     StartNewProcess(arguments);
+                }
+            }
+            // Give the choice to the user to stop all the processes or to exit the management console
+            Console.WriteLine("Press 's' to stop all processes or 'q' to quit the management console.");
+            while (true)
+            {
+                switch (Console.ReadKey().KeyChar)
+                {
+                    case 's':
+                        Process[] processes = Process.GetProcessesByName("Client");
+                        foreach (Process process in processes)
+                        {
+                            process.Kill();
+                        }
+                        processes = Process.GetProcessesByName("TServer");
+                        foreach (Process process in processes)
+                        {
+                            process.Kill();
+                        }
+                        processes = Process.GetProcessesByName("LServer");
+                        foreach (Process process in processes)
+                        {
+                            process.Kill();
+                        }
+                        Console.WriteLine("");
+                        break;
+                    case 'q':
+                        return;
+                    default:
+                        Console.WriteLine("\nInvalid command.");
+                        break;
                 }
             }
         }
