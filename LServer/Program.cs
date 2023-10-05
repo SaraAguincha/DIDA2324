@@ -65,8 +65,12 @@ using System.Text.RegularExpressions;
         ServerPort serverPort;
         serverPort = new ServerPort(hostname, port, ServerCredentials.Insecure);
 
+        // Server id in int format for Paxos
+        char lastChar = processId[processId.Length - 1];
+        int serverId = Int32.Parse(lastChar.ToString());
+
         // all the functions of the LServer will be done here
-        LServerService lServerService = new LServerService(processId, lServers);
+        LServerService lServerService = new LServerService(processId, serverId, lServers);
 
         // all of the function call async related to clients, tservers and lservers
         LServerService_TServer tServerService = new LServerService_TServer(lServerService);
@@ -92,6 +96,11 @@ using System.Text.RegularExpressions;
         Console.WriteLine("Timer started at " + DateTime.Now);
 
         Console.WriteLine("Server is running in the port: " + port + " and is ready to accept requests...");
-        while (true) ;
+
+        while (true)
+        {
+            lServerService.DoPaxos();   // TODO - should be called in the start of an epoch
+            System.Threading.Thread.Sleep(10000);
+        }
     }
 }
