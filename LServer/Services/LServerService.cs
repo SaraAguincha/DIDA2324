@@ -18,14 +18,15 @@ namespace LServer.Services
 
         private List<int> lServersId = new List<int> {1,2,3};
 
-
         private Dictionary<string, GrpcChannel> channels = new Dictionary<string, GrpcChannel>();
         private Dictionary<string, PaxosService.PaxosServiceClient> lServerInstances = new Dictionary<string, PaxosService.PaxosServiceClient>();
         private Dictionary<string, string> LServers;
 
-
-        // Lease request queue for this Lease Manager
+        // Paxos related atributes
+        int readTimestamp = 0;
+        int writeTimestamp = 0;
         Queue<GrantLeaseRequest> leaseRequestQueue = new Queue<GrantLeaseRequest>();
+
         public LServerService(string lManagerID, int serverId, Dictionary<string, string> lServers) 
         {
             this.lManagerID = lManagerID;
@@ -57,6 +58,9 @@ namespace LServer.Services
                 Lease lease = new Lease();
                 lease.TManagerId = request.TManagerId;
                 lease.Key = key;
+                // TODO - IMPORTANT - For now, the lease requests are being redirected to the TServer directly.
+                // This function should wait until the CURRENT paxos round is being finished, after the CURRENT round ends,
+                // it will grant the leases SEQUENTIALY to each of the TManager that has requested it (abiding the consensual order)
                 leaseReply.Leases.Add(lease);
             }
 
@@ -66,8 +70,49 @@ namespace LServer.Services
             return leaseReply;
         }
 
+        public PromiseReply PaxosPrepare(PrepareRequest request)
+        {
+            List<PromiseReply> promisesReplies = new List<PromiseReply>();
+            List<Task> tasks = new List<Task>();
+            // for each LServer starts a task with a prepare request
+            foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
+            {
+                // for each entry in LServers, run a task with the request for a promise
+                Task t = Task.Run(() =>
+                {
+                    lServerInstances.Value.PrepareAsync(request);
+                });
+                tasks.Add(t);
+            }
+            PromiseReply? reply = null;
+            // TODO - Change epoch to the right one
+            if (request.RoundId > readTimestamp &&  request.RoundId < writeTimestamp)
+            {   
+                reply = new PromiseReply { Epoch = 0, ReadTimestamp = this.readTimestamp};
+                foreach (var leaseRequest in leaseRequestQueue)
+                {
+                    PaxosLease paxosLease = new PaxosLease { TManagerId = leaseRequest.TManagerId};
+                    foreach (var key in leaseRequest.Key)
+                    {
+                        paxosLease.Key.Add(key);
+                    }
+                    reply.Queue.Add(paxosLease);
+                }
+            }
+            return reply;
+        }
+
         /*
-         * DoPaxos: Executes Paxos
+              _____        __   ______   _____ 
+             |  __ \ /\    \ \ / / __ \ / ____|
+             | |__) /  \    \ V / |  | | (___  
+             |  ___/ /\ \    > <| |  | |\___ \ 
+             | |  / ____ \  / . \ |__| |____) |
+             |_| /_/    \_\/_/ \_\____/|_____/ 
+        */
+
+        /*
+         * Consensus: Main execution of the Paxos algorithm
          * Checks which process should be leader.
          * Then if it's the leader, sends a PrepareRequest to all the other servers notifying
          * If it's not the leader it will wait for a PrepareRequest.
@@ -77,7 +122,7 @@ namespace LServer.Services
 
         // Clunky, and it takes too much time because of thread sleeping. Should be possible to not use that.
         // TODO - implement the prepare and accept functions as seperate functions, make it more readable
-        public bool DoPaxos()
+        public void Consensus()
         {
             int currentLeaderId;
             List<Grpc.Core.AsyncUnaryCall<PromiseReply>> promisesReplies = new List<Grpc.Core.AsyncUnaryCall<PromiseReply>>();
@@ -99,87 +144,76 @@ namespace LServer.Services
 
             // if the currentLeaderId is this server, waits for promiseReplies from the majority of lservers
             if (this.serverId == currentLeaderId)
-            {
-                // prepares the PrepareRequest
-                // TODO - use the right epoch and the right roundId
-                PrepareRequest prepareRequest = new PrepareRequest { Epoch = 0, ProposerId = this.serverId, RoundId = 0 };
-
-                foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
-                {
-                    // for each entry in LServers, run a task with the request for a promise
-                    Task t = Task.Run(() =>
-                    {
-                        Grpc.Core.AsyncUnaryCall<PromiseReply> promiseReply = lServerInstances.Value.PrepareAsync(prepareRequest);
-                        promisesReplies.Add(promiseReply);
-                        return Task.CompletedTask;
-                    });
-                    tasks.Add(t);
-                }
-
-                // waits some time for responses
-                System.Threading.Thread.Sleep(100);
-
-                // If the promise replies are not the majority, return false
-                // TODO - review the way the majority is calculated
-                if (promisesReplies.Count < lServersId.Count / 2)
-                {
-                    Console.WriteLine("number of replies: " + promisesReplies.Count);
-                    Console.WriteLine("I didn't have the majority :(");
-                    return false;
-                }
-
-                Console.WriteLine("I am the leader and I concluded the prepare:" + serverId);
-                // TODO - accept/propose phase
-
-                return true;
-            }
-
+                ConsensusLeader(promisesReplies, tasks, currentLeaderId);
             // awaits for the leader to make a prepareRequest, and sends a promiseReply
             else
-            {
-                Task waitTask = Task.Run(async () =>
-                {
-                    // TODO - based on the id of the leader, get his id, currently hardcoded
-                    // Receive a prepareRequest from the leader
-                    PromiseReply promiseRequest = await this.lServerInstances["LM1"].PrepareAsync(new PrepareRequest());
-
-                });
-
-                // waits some time for a request
-                System.Threading.Thread.Sleep(2000);
-                if (waitTask.IsCompleted)
-                {
-                    Console.WriteLine("Current leader is: " + currentLeaderId + "and I am server:" + serverId);
-                    return true;
-                }
-
-                // TODO - if false, repeat in order to select a new leader
-                Console.WriteLine("Current leader is: " + currentLeaderId + "and I am server:" + serverId);
-                Console.WriteLine("I had no response :(");
-                return false;
-            }
+                ConsensusAcceptor(promisesReplies, tasks, currentLeaderId);
         }
 
-        public PromiseReply PaxosPrepare(PrepareRequest request)
+        public bool ConsensusLeader(
+            List<Grpc.Core.AsyncUnaryCall<PromiseReply>> promisesReplies,
+            List<Task> tasks,
+            int currentLeaderId) 
         {
-            List<PromiseReply> promisesReplies = new List<PromiseReply>();
-            List<Task> tasks = new List<Task>();
-            // for each LServer starts a task with a prepare request
+            // prepares the PrepareRequest
+            // TODO - use the right epoch and the right roundId
+            PrepareRequest prepareRequest = new PrepareRequest { Epoch = 0, ProposerId = this.serverId, RoundId = 0 };
+
             foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
             {
                 // for each entry in LServers, run a task with the request for a promise
                 Task t = Task.Run(() =>
                 {
-                    lServerInstances.Value.PrepareAsync(request);
+                    Grpc.Core.AsyncUnaryCall<PromiseReply> promiseReply = lServerInstances.Value.PrepareAsync(prepareRequest);
+                    promisesReplies.Add(promiseReply);
+                    return Task.CompletedTask;
                 });
                 tasks.Add(t);
             }
 
-            PromiseReply reply = new PromiseReply();
-            return reply;
+            // waits some time for responses
+            System.Threading.Thread.Sleep(100);
+
+            // If the promise replies are not the majority, return false
+            // TODO - review the way the majority is calculated
+            if (promisesReplies.Count < lServersId.Count / 2)
+            {
+                Console.WriteLine("number of replies:" + promisesReplies.Count);
+                Console.WriteLine("I didn't have the majority :(");
+                return false;
+            }
+
+            Console.WriteLine("I am the leader and I concluded the prepare:" + serverId);
+            // TODO - accept/propose phase
+
+            return true;
         }
 
-        
+        public bool ConsensusAcceptor(
+            List<Grpc.Core.AsyncUnaryCall<PromiseReply>> promisesReplies,
+            List<Task> tasks,
+            int currentLeaderId)
+        {
+            Task waitTask = Task.Run(async () =>
+            {
+                // TODO - based on the id of the leader, get his id, currently hardcoded
+                // Receive a prepareRequest from the leader
+                PromiseReply promiseRequest = await this.lServerInstances["LM1"].PrepareAsync(new PrepareRequest());
 
+            });
+
+            // waits some time for a request
+            System.Threading.Thread.Sleep(2000);
+            if (waitTask.IsCompleted)
+            {
+                Console.WriteLine("Current leader is:" + currentLeaderId + " and I am server:" + serverId);
+                return true;
+            }
+
+            // TODO - if false, repeat in order to select a new leader
+            Console.WriteLine("Current leader is:" + currentLeaderId + " and I am server:" + serverId);
+            Console.WriteLine("I had no response :(");
+            return false;
+        }
     }
 }

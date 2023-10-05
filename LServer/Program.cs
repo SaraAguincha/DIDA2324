@@ -9,11 +9,16 @@ using System.Text.RegularExpressions;
 {
     // Current epoch (has to be global variable)
     private static int epoch = 0;
-    private const int DELTA = 10000;
+    private const int DELTA = 10000; // value in miliseconds
+
+    // Function to execute at the start of each epoch
+    // Each epoch executes each DELTA miliseconds
     static void NextEpoch(object state)
     {
         epoch++;
         Console.WriteLine("Advanced to epoch number " + epoch.ToString());
+        LServerService lServerService = (LServerService)state;
+        lServerService.Consensus();
     }
     public static void Main(string[] args)
     {
@@ -92,15 +97,11 @@ using System.Text.RegularExpressions;
 
         // Timer related activities
         TimerCallback timerCallback = NextEpoch;
-        Timer timer = new Timer(timerCallback, null, DELTA, DELTA);
+        Timer timer = new Timer(timerCallback, lServerService, DELTA, DELTA);
         Console.WriteLine("Timer started at " + DateTime.Now);
 
         Console.WriteLine("Server is running in the port: " + port + " and is ready to accept requests...");
 
-        while (true)
-        {
-            lServerService.DoPaxos();   // TODO - should be called in the start of an epoch
-            System.Threading.Thread.Sleep(10000);
-        }
+        while (true) ;
     }
 }
