@@ -1,4 +1,4 @@
-﻿using Grpc.Net.Client;
+using Grpc.Net.Client;
 using Protos;
 using System;
 using System.Collections.Generic;
@@ -75,7 +75,7 @@ namespace LServer.Services
             List<PromiseReply> promisesReplies = new List<PromiseReply>();
             List<Task> tasks = new List<Task>();
             // for each LServer starts a task with a prepare request
-            foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
+            /*foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
             {
                 // for each entry in LServers, run a task with the request for a promise
                 Task t = Task.Run(() =>
@@ -83,8 +83,8 @@ namespace LServer.Services
                     lServerInstances.Value.PrepareAsync(request);
                 });
                 tasks.Add(t);
-            }
-            PromiseReply? reply = null;
+            }*/
+            PromiseReply reply = new PromiseReply { Epoch = -1};
             // TODO - Change epoch to the right one
             if (request.RoundId > readTimestamp &&  request.RoundId < writeTimestamp)
             {   
@@ -122,10 +122,10 @@ namespace LServer.Services
 
         // Clunky, and it takes too much time because of thread sleeping. Should be possible to not use that.
         // TODO - implement the prepare and accept functions as seperate functions, make it more readable
-        public void Consensus()
+        public async Task Consensus()
         {
             int currentLeaderId;
-            List<Grpc.Core.AsyncUnaryCall<PromiseReply>> promisesReplies = new List<Grpc.Core.AsyncUnaryCall<PromiseReply>>();
+            List<Task<PromiseReply>> promisesReplies = new List<Task<PromiseReply>>();
             List<Task> tasks = new List<Task>();
 
             // what server should be leader
@@ -150,8 +150,8 @@ namespace LServer.Services
                 ConsensusAcceptor(promisesReplies, tasks, currentLeaderId);
         }
 
-        public bool ConsensusLeader(
-            List<Grpc.Core.AsyncUnaryCall<PromiseReply>> promisesReplies,
+        public async Task<bool> ConsensusLeader(
+            List<Task<PromiseReply>> promisesReplies,
             List<Task> tasks,
             int currentLeaderId) 
         {
@@ -162,17 +162,24 @@ namespace LServer.Services
             foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
             {
                 // for each entry in LServers, run a task with the request for a promise
-                Task t = Task.Run(() =>
-                {
-                    Grpc.Core.AsyncUnaryCall<PromiseReply> promiseReply = lServerInstances.Value.PrepareAsync(prepareRequest);
-                    promisesReplies.Add(promiseReply);
-                    return Task.CompletedTask;
-                });
-                tasks.Add(t);
+                Grpc.Core.AsyncUnaryCall<PromiseReply> promiseReply = lServerInstances.Value.PrepareAsync(prepareRequest);
+                promisesReplies.Add(promiseReply.ResponseAsync);
             }
 
             // waits some time for responses
+            Console.WriteLine("Sleep starting");
             System.Threading.Thread.Sleep(100);
+            //Task.WaitAll(promisesReplies.ToArray(), 500);
+
+            // Debug
+
+            Console.WriteLine(promisesReplies[0].IsFaulted);
+            
+            // For some reason this doesnt work 
+            /*foreach(var task in promisesReplies)
+            {
+                Console.WriteLine(task?.Result?.Epoch);
+            }*/
 
             // If the promise replies are not the majority, return false
             // TODO - review the way the majority is calculated
@@ -184,35 +191,21 @@ namespace LServer.Services
             }
 
             Console.WriteLine("I am the leader and I concluded the prepare:" + serverId);
+            Console.WriteLine("number of replies:" + promisesReplies.Count);
             // TODO - accept/propose phase
 
             return true;
         }
 
-        public bool ConsensusAcceptor(
-            List<Grpc.Core.AsyncUnaryCall<PromiseReply>> promisesReplies,
+        public async Task<bool> ConsensusAcceptor(
+            List<Task<PromiseReply>> promisesReplies,
             List<Task> tasks,
             int currentLeaderId)
         {
-            Task waitTask = Task.Run(async () =>
-            {
-                // TODO - based on the id of the leader, get his id, currently hardcoded
-                // Receive a prepareRequest from the leader
-                PromiseReply promiseRequest = await this.lServerInstances["LM1"].PrepareAsync(new PrepareRequest());
-
-            });
-
-            // waits some time for a request
-            System.Threading.Thread.Sleep(2000);
-            if (waitTask.IsCompleted)
-            {
-                Console.WriteLine("Current leader is:" + currentLeaderId + " and I am server:" + serverId);
-                return true;
-            }
 
             // TODO - if false, repeat in order to select a new leader
             Console.WriteLine("Current leader is:" + currentLeaderId + " and I am server:" + serverId);
-            Console.WriteLine("I had no response :(");
+            //Console.WriteLine("I had no response :(");
             return false;
         }
     }

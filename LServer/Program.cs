@@ -2,6 +2,7 @@
 using Grpc.Net.Client;
 using LServer.Services;
 using Protos;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
 // Lease Server Main
@@ -20,7 +21,7 @@ using System.Text.RegularExpressions;
         LServerService lServerService = (LServerService)state;
         lServerService.Consensus();
     }
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
         // parsing according to config file
         // a TServer will be given the following information:
@@ -60,6 +61,8 @@ using System.Text.RegularExpressions;
         lServers.Add("LM2", "http://localhost:20002");
         lServers.Add("LM3", "http://localhost:20003");
 
+        
+
         // ------------------------------------------------------------------------
 
         // Server configuration
@@ -75,6 +78,7 @@ using System.Text.RegularExpressions;
         int serverId = Int32.Parse(lastChar.ToString());
 
         // all the functions of the LServer will be done here
+        lServers.Remove(processId);
         LServerService lServerService = new LServerService(processId, serverId, lServers);
 
         // all of the function call async related to clients, tservers and lservers
@@ -102,6 +106,6 @@ using System.Text.RegularExpressions;
 
         Console.WriteLine("Server is running in the port: " + port + " and is ready to accept requests...");
 
-        while (true) ;
+        while (true);
     }
 }

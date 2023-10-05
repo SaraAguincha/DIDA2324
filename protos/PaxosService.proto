@@ -29,7 +29,7 @@ message AcceptedReply {
 	int32 epoch = 3;
 }
 
-// Repeated from another protobuf file
+// Repeated from another protobuf file, but its necessary :()
 message PaxosLease {
 	string TManagerId = 1;
 	repeated string key = 2;
