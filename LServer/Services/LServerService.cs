@@ -56,9 +56,11 @@ namespace LServer.Services
             // TODO - For now, lease managers simply reply with whatever the GrantLeaseRequest asked (paxos missing - needed to establish an order)
             foreach (string key in request.Key)
             {
-                Lease lease = new Lease();
-                lease.TManagerId = request.TManagerId;
-                lease.Key = key;
+                Lease lease = new Lease
+                {
+                    TManagerId = request.TManagerId,
+                    Key = { key }
+                };
                 // TODO - IMPORTANT - For now, the lease requests are being redirected to the TServer directly.
                 // This function should wait until the CURRENT paxos round is being finished, after the CURRENT round ends,
                 // it will grant the leases SEQUENTIALY to each of the TManager that has requested it (abiding the consensual order)
@@ -84,7 +86,7 @@ namespace LServer.Services
                 reply = new PromiseReply { Epoch = 0, ReadTimestamp = this.readTimestamp };
                 foreach (var leaseRequest in leaseRequestQueue)
                 {
-                    PaxosLease paxosLease = new PaxosLease { TManagerId = leaseRequest.TManagerId };
+                    Lease paxosLease = new Lease { TManagerId = leaseRequest.TManagerId };
                     foreach (var key in leaseRequest.Key)
                     {
                         paxosLease.Key.Add(key);

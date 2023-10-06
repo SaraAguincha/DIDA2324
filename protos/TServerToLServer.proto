@@ -30,5 +30,5 @@ message GrantLeaseReply {
 */
 message Lease {
 	string TManagerId = 1;
-	string key = 2;
+	repeated string key = 2;
 }
