@@ -84,13 +84,16 @@ using System.Text.RegularExpressions;
         // all of the function call async related to clients, tservers and lservers
         LServerService_TServer tServerService = new LServerService_TServer(lServerService);
 
+        LServerService_Paxos paxosService = new LServerService_Paxos(lServerService);
+
         // Bind all the services:
         // Client Services          (Client Commands)   -> currently the only one
         // TManagerServer Services  (Info disclosure)
         // LManagerServer Service   (Leases requests)
         Server server = new Server
         {
-            Services = { TServerLServerService.BindService(tServerService) },
+            Services = { TServerLServerService.BindService(tServerService),
+                         PaxosService.BindService(paxosService)},
             Ports = { serverPort }
         };
 

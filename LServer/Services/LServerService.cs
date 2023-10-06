@@ -38,6 +38,7 @@ namespace LServer.Services
             // populate all of lservers connections
             foreach (KeyValuePair<string, string> lserver in this.LServers)
             {
+                Console.WriteLine(lserver.Value);
                 GrpcChannel channel = GrpcChannel.ForAddress(lserver.Value);
                 channels.Add(lserver.Key, channel);
                 lServerInstances.Add(lserver.Key, new PaxosService.PaxosServiceClient(channel));
@@ -72,26 +73,18 @@ namespace LServer.Services
 
         public PromiseReply PaxosPrepare(PrepareRequest request)
         {
+            Console.WriteLine("Entered Paxos Prepare!");
             List<PromiseReply> promisesReplies = new List<PromiseReply>();
             List<Task> tasks = new List<Task>();
-            // for each LServer starts a task with a prepare request
-            /*foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
-            {
-                // for each entry in LServers, run a task with the request for a promise
-                Task t = Task.Run(() =>
-                {
-                    lServerInstances.Value.PrepareAsync(request);
-                });
-                tasks.Add(t);
-            }*/
+            
             PromiseReply reply = new PromiseReply { Epoch = -1};
             // TODO - Change epoch to the right one
-            if (request.RoundId > readTimestamp &&  request.RoundId < writeTimestamp)
-            {   
-                reply = new PromiseReply { Epoch = 0, ReadTimestamp = this.readTimestamp};
+            if (request.RoundId > readTimestamp && request.RoundId > writeTimestamp)
+            {
+                reply = new PromiseReply { Epoch = 0, ReadTimestamp = this.readTimestamp };
                 foreach (var leaseRequest in leaseRequestQueue)
                 {
-                    PaxosLease paxosLease = new PaxosLease { TManagerId = leaseRequest.TManagerId};
+                    PaxosLease paxosLease = new PaxosLease { TManagerId = leaseRequest.TManagerId };
                     foreach (var key in leaseRequest.Key)
                     {
                         paxosLease.Key.Add(key);
@@ -99,6 +92,8 @@ namespace LServer.Services
                     reply.Queue.Add(paxosLease);
                 }
             }
+            else
+                Console.WriteLine("Oops, roundID too low.");
             return reply;
         }
 
@@ -122,12 +117,12 @@ namespace LServer.Services
 
         // Clunky, and it takes too much time because of thread sleeping. Should be possible to not use that.
         // TODO - implement the prepare and accept functions as seperate functions, make it more readable
-        public async Task Consensus()
+        public void Consensus()
         {
             int currentLeaderId;
             List<Task<PromiseReply>> promisesReplies = new List<Task<PromiseReply>>();
             List<Task> tasks = new List<Task>();
-
+            
             // what server should be leader
 
             // in case it's the first epoch, leaderId will always be lower than the first server id
@@ -150,14 +145,14 @@ namespace LServer.Services
                 ConsensusAcceptor(promisesReplies, tasks, currentLeaderId);
         }
 
-        public async Task<bool> ConsensusLeader(
+        public bool ConsensusLeader(
             List<Task<PromiseReply>> promisesReplies,
             List<Task> tasks,
             int currentLeaderId) 
         {
             // prepares the PrepareRequest
             // TODO - use the right epoch and the right roundId
-            PrepareRequest prepareRequest = new PrepareRequest { Epoch = 0, ProposerId = this.serverId, RoundId = 0 };
+            PrepareRequest prepareRequest = new PrepareRequest { Epoch = 0, ProposerId = this.serverId, RoundId = 3 };
 
             foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
             {
@@ -167,37 +162,25 @@ namespace LServer.Services
             }
 
             // waits some time for responses
-            Console.WriteLine("Sleep starting");
-            System.Threading.Thread.Sleep(100);
-            //Task.WaitAll(promisesReplies.ToArray(), 500);
+            Task.WaitAll(promisesReplies.ToArray(), 500);
 
-            // Debug
-
-            Console.WriteLine(promisesReplies[0].IsFaulted);
-            
-            // For some reason this doesnt work 
-            /*foreach(var task in promisesReplies)
+            foreach(var task in promisesReplies)
             {
-                Console.WriteLine(task?.Result?.Epoch);
-            }*/
+                Console.WriteLine("HERE IS THE TASK RESULT: " + task?.Result?.Epoch);
+            }
+
+            // End of debug
 
             // If the promise replies are not the majority, return false
             // TODO - review the way the majority is calculated
-            if (promisesReplies.Count < lServersId.Count / 2)
-            {
-                Console.WriteLine("number of replies:" + promisesReplies.Count);
-                Console.WriteLine("I didn't have the majority :(");
-                return false;
-            }
 
-            Console.WriteLine("I am the leader and I concluded the prepare:" + serverId);
-            Console.WriteLine("number of replies:" + promisesReplies.Count);
+            Console.WriteLine("I am the leader:" + serverId + ", and ran the prepare phase.");
             // TODO - accept/propose phase
 
             return true;
         }
 
-        public async Task<bool> ConsensusAcceptor(
+        public bool ConsensusAcceptor(
             List<Task<PromiseReply>> promisesReplies,
             List<Task> tasks,
             int currentLeaderId)
