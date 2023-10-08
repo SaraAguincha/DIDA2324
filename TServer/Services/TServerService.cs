@@ -83,12 +83,13 @@ namespace TServer.Services
 
             // TODO - Request a lease from all of the lease managers
             // not yet implemented
-            GrantLeaseRequest leaseRequest = new GrantLeaseRequest { TManagerId = this.TManagerId, Key = { leaseKeys }};
+            NewLeaseRequest leaseRequest = new NewLeaseRequest { TManagerId = this.TManagerId, Key = { leaseKeys }};
 
-            // TODO
-            GrantLeaseReply leaseReply = RequestLease(leaseRequest);
+            // TODO - should be async, currently not
+            NewLeaseReply leaseReply = RequestLease(leaseRequest);
+            Console.WriteLine("server responded with: " + leaseReply.Ack);
 
-            // TODO - Lease verification
+            // TODO - wait for the epoch to end (?)
 
             // currently responds with the dadints from writes
             TxSubmitReply reply = new TxSubmitReply { DadInts = { writes } };
@@ -113,25 +114,26 @@ namespace TServer.Services
             return reply;
         }
 
-        public GrantLeaseReply RequestLease(GrantLeaseRequest request)
+        public NewLeaseReply RequestLease(NewLeaseRequest request)
         {
             // requests a lease from all of the LServers
-            List<GrantLeaseReply> leaseReplies = new List<GrantLeaseReply>();
-            List<Task> tasks = new List<Task>();
+            List<Task<NewLeaseReply>> leaseReplies = new List<Task<NewLeaseReply>>();
             // for each LServer starts a task with a request
             foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> clientInstance in this.clientInstances)
             {
-                // for each entry in LServers, run a task with the request for a lease
-                Task t = Task.Run(() =>
-                {
-                    clientInstance.Value.GrantLeaseAsync(request);
-                });
-                tasks.Add(t);
+                // for each entry in LServers, makes a request for a lease
+                AsyncUnaryCall<NewLeaseReply> leaseReply = clientInstance.Value.RequestNewLeaseAsync(request);
+                leaseReplies.Add(leaseReply.ResponseAsync);
+                
             }
+            // TODO
             // wait for the majority of the tasks to get a response
             // sort what it receives and return one reply to the function Transaction
+            Task.WaitAll(leaseReplies.ToArray(), 500);
 
-            GrantLeaseReply reply = new GrantLeaseReply();
+            // for now it returns the first response
+            //Console.WriteLine(leaseReplies.Count);
+            NewLeaseReply reply = leaseReplies.First().Result;
 
             return reply;
         }

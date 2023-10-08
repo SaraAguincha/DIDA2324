@@ -1,3 +1,4 @@
+using Grpc.Core;
 using Grpc.Net.Client;
 using Protos;
 using System;
@@ -20,40 +21,55 @@ namespace LServer.Services
 
         private Dictionary<string, GrpcChannel> channels = new Dictionary<string, GrpcChannel>();
         private Dictionary<string, PaxosService.PaxosServiceClient> lServerInstances = new Dictionary<string, PaxosService.PaxosServiceClient>();
+        private Dictionary<string, TServerLServerService.TServerLServerServiceClient> tServerInstances = new Dictionary<string, TServerLServerService.TServerLServerServiceClient>();
         private Dictionary<string, string> LServers;
+        private Dictionary<string, string> TServers;
+
 
         // Paxos related atributes
+        int epoch = 0;          // should be ++ in the start of consensus perhaps?
         int readTimestamp = 0;
         int writeTimestamp = 0;
-        Queue<GrantLeaseRequest> leaseRequestQueue = new Queue<GrantLeaseRequest>();
+        Queue<NewLeaseRequest> leaseRequestQueue = new Queue<NewLeaseRequest>();
+        Queue<Lease> leaseQueue = new Queue<Lease>();
+        List<string> pendingTManagers = new List<string>();
 
-        public LServerService(string lManagerID, int serverId, Dictionary<string, string> lServers) 
+        public LServerService(string lManagerID, int serverId, Dictionary<string, string> lServers, Dictionary<string, string> tServers) 
         {
             this.lManagerID = lManagerID;
             this.LServers = lServers;
+            this.TServers = tServers;
             this.serverId = serverId;
             this.leaderId = 0;          // LeaderId is always > 0 ((for now))
             
-
+            
             // populate all of lservers connections
             foreach (KeyValuePair<string, string> lserver in this.LServers)
             {
-                Console.WriteLine(lserver.Value);
+                //Console.WriteLine(lserver.Value);
                 GrpcChannel channel = GrpcChannel.ForAddress(lserver.Value);
                 channels.Add(lserver.Key, channel);
                 lServerInstances.Add(lserver.Key, new PaxosService.PaxosServiceClient(channel));
             }
+
+            // populate all of tservers connections
+            foreach (KeyValuePair<string, string> tserver in this.TServers)
+            {
+                //Console.WriteLine(tserver.Value);
+                GrpcChannel channel = GrpcChannel.ForAddress(tserver.Value);
+                channels.Add(tserver.Key, channel);
+                tServerInstances.Add(tserver.Key, new TServerLServerService.TServerLServerServiceClient(channel));
+            }
         }
 
-        public GrantLeaseReply GrantLease(GrantLeaseRequest request)
+        /* NewLease request by TServer
+         * LServer replies with an ack, only at the end of an epoch
+         * sends the list of Leases defined
+         */
+        public NewLeaseReply NewLease(NewLeaseRequest request)
         {
-            // Adds lease request to the queue (will be sent to paxos)
-            //leaseRequestQueue.Enqueue(request);
+            // Adds lease request to the queue (will be used in paxos)
 
-            GrantLeaseReply leaseReply = new GrantLeaseReply();
-            leaseReply.Epoch = 0; // TODO - Insert right epoch
-
-            // TODO - For now, lease managers simply reply with whatever the GrantLeaseRequest asked (paxos missing - needed to establish an order)
             foreach (string key in request.Key)
             {
                 Lease lease = new Lease
@@ -61,17 +77,53 @@ namespace LServer.Services
                     TManagerId = request.TManagerId,
                     Key = { key }
                 };
-                // TODO - IMPORTANT - For now, the lease requests are being redirected to the TServer directly.
-                // This function should wait until the CURRENT paxos round is being finished, after the CURRENT round ends,
-                // it will grant the leases SEQUENTIALY to each of the TManager that has requested it (abiding the consensual order)
-                leaseReply.Leases.Add(lease);
+                // adds the lease request to the Queue
+                leaseQueue.Enqueue(lease);
+                pendingTManagers.Add(request.TManagerId);
             }
 
-            // TODO - this is what should be done after paxos is executed
-            //leaseRequestQueue = new Queue<GrantLeaseRequest>();
+            // Replies with an ack 
+            NewLeaseReply leaseReply = new NewLeaseReply { Ack = true };
+            Console.WriteLine("Response sent: " + leaseReply.Ack);
 
             return leaseReply;
         }
+
+        /* TODO - complete function
+         * Send the Leases in the beginning of a new epoch
+         * in the beginning of the epoch, after deciding a leader
+         * run the accept step of paxos, and send the current queue of leases to the tServers
+         */
+        public SendLeasesReply SendLeases(SendLeasesRequest request)
+        {
+            // Should have a lock when doing this
+            // Prepares the request
+            SendLeasesRequest leaseRequest = new SendLeasesRequest
+            { 
+                Epoch = this.epoch,
+                Leases = { leaseQueue.ToArray() }
+            };
+
+            List<Task<SendLeasesReply>> leaseReplies = new List<Task<SendLeasesReply>>();
+
+            // Sends the list to every TManager that has sent a request
+            foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> tServerInstances in this.tServerInstances)
+            {
+                // for each entry in TServers, run a task with the current value in the Leases Queue
+                AsyncUnaryCall<SendLeasesReply> leaseReply = tServerInstances.Value.SendLeasesAsync(leaseRequest);
+                leaseReplies.Add(leaseReply.ResponseAsync);
+            }
+            // wait for the responses
+            Task.WaitAll(leaseReplies.ToArray(), 500);
+
+            // TODO - for now it returns the first response received
+            SendLeasesReply sentLeasesReply = leaseReplies.First().Result;
+
+            return sentLeasesReply;
+        }
+
+
+        // ---------------------------------------------------------
 
         public PromiseReply PaxosPrepare(PrepareRequest request)
         {
@@ -142,6 +194,8 @@ namespace LServer.Services
             // if the currentLeaderId is this server, waits for promiseReplies from the majority of lservers
             if (this.serverId == currentLeaderId)
                 ConsensusLeader(promisesReplies, tasks, currentLeaderId);
+
+
             // awaits for the leader to make a prepareRequest, and sends a promiseReply
             else
                 ConsensusAcceptor(promisesReplies, tasks, currentLeaderId);
@@ -159,7 +213,7 @@ namespace LServer.Services
             foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
             {
                 // for each entry in LServers, run a task with the request for a promise
-                Grpc.Core.AsyncUnaryCall<PromiseReply> promiseReply = lServerInstances.Value.PrepareAsync(prepareRequest);
+                AsyncUnaryCall<PromiseReply> promiseReply = lServerInstances.Value.PrepareAsync(prepareRequest);
                 promisesReplies.Add(promiseReply.ResponseAsync);
             }
 

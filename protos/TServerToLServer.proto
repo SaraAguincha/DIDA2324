@@ -3,25 +3,39 @@ syntax = "proto3";
 package protos;
 
 service TServerLServerService {
-	rpc GrantLease (GrantLeaseRequest) returns (GrantLeaseReply);
+	rpc RequestNewLease (NewLeaseRequest) returns (NewLeaseReply);
+	rpc SendLeases (SendLeasesRequest) returns (SendLeasesReply);
 }
 
 /* Request for a Lease by the TServer
 	- TManager identifier
 	- All DadInts included in Tx (Read and Write)
 */
-message GrantLeaseRequest {
+message NewLeaseRequest {
 	string TManagerId = 1;
 	repeated string key = 2;
 }
 
-/* Reply by LeaseManagers to TServer
+/*	Reply to the Request with an ack
+*/
+message NewLeaseReply {
+	bool ack = 1;
+}
+
+/* Send Leases of the epoch to TManagers
 	- Epoch
 	- List of leases
 */
-message GrantLeaseReply {
+message SendLeasesRequest {
 	int32 Epoch = 1;
 	repeated Lease leases = 2;
+}
+
+/* Reply of TServer
+	- ack
+*/
+message SendLeasesReply {
+	bool ack = 1;
 }
 
 /* Object Lease

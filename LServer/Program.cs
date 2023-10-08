@@ -56,7 +56,12 @@ using System.Text.RegularExpressions;
         //int port = 10200;
         //string lManagerId = "LM1";
         Dictionary<string, string> lServers = new Dictionary<string, string>();
+        Dictionary<string, string> tServers = new Dictionary<string, string>();
         // TODO - Hardcoded
+        tServers.Add("TM1", "http://localhost:10001");
+        tServers.Add("TM2", "http://localhost:10002");
+        tServers.Add("TM3", "http://localhost:10003");
+
         lServers.Add("LM1", "http://localhost:20001");
         lServers.Add("LM2", "http://localhost:20002");
         lServers.Add("LM3", "http://localhost:20003");
@@ -79,7 +84,7 @@ using System.Text.RegularExpressions;
 
         // all the functions of the LServer will be done here
         lServers.Remove(processId);
-        LServerService lServerService = new LServerService(processId, serverId, lServers);
+        LServerService lServerService = new LServerService(processId, serverId, lServers, tServers);
 
         // all of the function call async related to clients, tservers and lservers
         LServerService_TServer tServerService = new LServerService_TServer(lServerService);
