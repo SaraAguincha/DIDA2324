@@ -83,10 +83,10 @@ namespace TServer.Services
 
             // TODO - Request a lease from all of the lease managers
             // not yet implemented
-            NewLeaseRequest leaseRequest = new NewLeaseRequest { TManagerId = this.TManagerId, Key = { leaseKeys }};
+            AskLeaseRequest leaseRequest = new AskLeaseRequest { TManagerId = this.TManagerId, Key = { leaseKeys }};
 
             // TODO - should be async, currently not
-            NewLeaseReply leaseReply = RequestLease(leaseRequest);
+            AskLeaseReply leaseReply = RequestLease(leaseRequest);
             Console.WriteLine("server responded with: " + leaseReply.Ack);
 
             // TODO - wait for the epoch to end (?)
@@ -114,15 +114,15 @@ namespace TServer.Services
             return reply;
         }
 
-        public NewLeaseReply RequestLease(NewLeaseRequest request)
+        public AskLeaseReply RequestLease(AskLeaseRequest request)
         {
             // requests a lease from all of the LServers
-            List<Task<NewLeaseReply>> leaseReplies = new List<Task<NewLeaseReply>>();
+            List<Task<AskLeaseReply>> leaseReplies = new List<Task<AskLeaseReply>>();
             // for each LServer starts a task with a request
             foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> clientInstance in this.clientInstances)
             {
                 // for each entry in LServers, makes a request for a lease
-                AsyncUnaryCall<NewLeaseReply> leaseReply = clientInstance.Value.RequestNewLeaseAsync(request);
+                AsyncUnaryCall<AskLeaseReply> leaseReply = clientInstance.Value.AskLeaseAsync(request);
                 leaseReplies.Add(leaseReply.ResponseAsync);
                 
             }
@@ -133,7 +133,7 @@ namespace TServer.Services
 
             // for now it returns the first response
             //Console.WriteLine(leaseReplies.Count);
-            NewLeaseReply reply = leaseReplies.First().Result;
+            AskLeaseReply reply = leaseReplies.First().Result;
 
             return reply;
         }

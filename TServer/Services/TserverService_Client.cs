@@ -12,11 +12,11 @@ namespace TServer.Services
 {
     public class TServerService_Client : ClientTServerService.ClientTServerServiceBase
     {
-        private readonly TServerService TServerService;
+        private readonly TServerService tServerService;
 
         public TServerService_Client (TServerService TServerService)
         {
-            this.TServerService = TServerService;
+            this.tServerService = TServerService;
         }
 
         public override Task<StatusReply> Status(StatusRequest request, ServerCallContext context)
@@ -26,7 +26,7 @@ namespace TServer.Services
             Console.WriteLine("Method: " + context.Method);
             Console.WriteLine("Peer: " + context.Peer);
 
-            return Task.FromResult(TServerService.State(request));
+            return Task.FromResult(tServerService.State(request));
         }
 
         public override Task<TxSubmitReply> TxSubmit(TxSubmitRequest request, ServerCallContext context)
@@ -36,7 +36,7 @@ namespace TServer.Services
             Console.WriteLine("Method: " + context.Method);
             Console.WriteLine("Peer: " + context.Peer);
 
-            return Task.FromResult(TServerService.Transaction(request));
+            return Task.FromResult(tServerService.Transaction(request));
         }
 
     }

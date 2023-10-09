@@ -19,14 +19,14 @@ namespace LServer.Services
             this.lServerService = lServerService;
         }
 
-        public override Task<NewLeaseReply> RequestNewLease(NewLeaseRequest request, ServerCallContext context) 
+        public override Task<AskLeaseReply> AskLease(AskLeaseRequest request, ServerCallContext context) 
         {
             Console.WriteLine("Deadline: " + context.Deadline);
             Console.WriteLine("Host: " + context.Host);
             Console.WriteLine("Method: " + context.Method);
             Console.WriteLine("Peer: " + context.Peer);
 
-            return Task.FromResult(lServerService.NewLease(request));
+            return Task.FromResult(lServerService.ProcessLeaseRequest(request));
         }
     }
 }

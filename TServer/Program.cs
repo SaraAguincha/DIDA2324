@@ -55,14 +55,17 @@ class Program
         serverPort = new ServerPort(hostname, port, ServerCredentials.Insecure);
 
         // all the functions of the TServer will be done here
-        TServerService TServerService = new TServerService(processId, lServers, lServers);
+        TServerService tServerService = new TServerService(processId, lServers, lServers);
 
         // all of the function call async related to clients, tservers and lservers
-        TServerService_Client clientService = new TServerService_Client(TServerService);
+        TServerService_Client clientService = new TServerService_Client(tServerService);
+
+        TServerService_LServer lServerService = new TServerService_LServer(tServerService);
 
         Server server = new Server
         {
-            Services = { ClientTServerService.BindService(clientService) },
+            Services = { ClientTServerService.BindService(clientService),
+                         TServerLServerService.BindService(lServerService)},
             Ports = { serverPort }
         };
 

@@ -3,7 +3,7 @@ syntax = "proto3";
 package protos;
 
 service TServerLServerService {
-	rpc RequestNewLease (NewLeaseRequest) returns (NewLeaseReply);
+	rpc AskLease (AskLeaseRequest) returns (AskLeaseReply);
 	rpc SendLeases (SendLeasesRequest) returns (SendLeasesReply);
 }
 
@@ -11,14 +11,14 @@ service TServerLServerService {
 	- TManager identifier
 	- All DadInts included in Tx (Read and Write)
 */
-message NewLeaseRequest {
+message AskLeaseRequest {
 	string TManagerId = 1;
 	repeated string key = 2;
 }
 
 /*	Reply to the Request with an ack
 */
-message NewLeaseReply {
+message AskLeaseReply {
 	bool ack = 1;
 }
 

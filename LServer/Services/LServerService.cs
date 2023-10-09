@@ -30,7 +30,7 @@ namespace LServer.Services
         int epoch = 0;          // should be ++ in the start of consensus perhaps?
         int readTimestamp = 0;
         int writeTimestamp = 0;
-        Queue<NewLeaseRequest> leaseRequestQueue = new Queue<NewLeaseRequest>();
+        Queue<AskLeaseRequest> leaseRequestQueue = new Queue<AskLeaseRequest>();
         Queue<Lease> leaseQueue = new Queue<Lease>();
         List<string> pendingTManagers = new List<string>();
 
@@ -62,11 +62,20 @@ namespace LServer.Services
             }
         }
 
+        /*
+              _______ _____                              
+             |__   __/ ____|                             
+                | | | (___   ___ _ ____   _____ _ __ ___ 
+                | |  \___ \ / _ \ '__\ \ / / _ \ '__/ __|
+                | |  ____) |  __/ |   \ V /  __/ |  \__ \
+                |_| |_____/ \___|_|    \_/ \___|_|  |___/
+
+        */
         /* NewLease request by TServer
          * LServer replies with an ack, only at the end of an epoch
          * sends the list of Leases defined
          */
-        public NewLeaseReply NewLease(NewLeaseRequest request)
+        public AskLeaseReply ProcessLeaseRequest(AskLeaseRequest request)
         {
             // Adds lease request to the queue (will be used in paxos)
 
@@ -83,7 +92,7 @@ namespace LServer.Services
             }
 
             // Replies with an ack 
-            NewLeaseReply leaseReply = new NewLeaseReply { Ack = true };
+            AskLeaseReply leaseReply = new AskLeaseReply { Ack = true };
             Console.WriteLine("Response sent: " + leaseReply.Ack);
 
             return leaseReply;
@@ -123,7 +132,14 @@ namespace LServer.Services
         }
 
 
-        // ---------------------------------------------------------
+        /*
+              _       _____                              
+             | |     / ____|                             
+             | |    | (___   ___ _ ____   _____ _ __ ___ 
+             | |     \___ \ / _ \ '__\ \ / / _ \ '__/ __|
+             | |____ ____) |  __/ |   \ V /  __/ |  \__ \
+             |______|_____/ \___|_|    \_/ \___|_|  |___/    
+        */
 
         public PromiseReply PaxosPrepare(PrepareRequest request)
         {
