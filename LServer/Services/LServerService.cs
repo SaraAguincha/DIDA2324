@@ -102,7 +102,7 @@ namespace LServer.Services
          * in the beginning of the epoch, after deciding a leader
          * run the accept step of paxos, and send the current queue of leases to the tServers
          */
-        public SendLeasesReply SendLeases(SendLeasesRequest request)
+        public bool BroadcastLeases()
         {
             // Should have a lock when doing this
             // Prepares the request
@@ -111,6 +111,9 @@ namespace LServer.Services
                 Epoch = this.epoch,
                 Leases = { leaseQueue.ToArray() }
             };
+
+            // TODO - WARNING - The operations between sending and reseting the queue must be atomic
+            leaseQueue = new Queue<Lease>();
 
             List<Task<SendLeasesReply>> leaseReplies = new List<Task<SendLeasesReply>>();
 
@@ -125,9 +128,7 @@ namespace LServer.Services
             Task.WaitAll(leaseReplies.ToArray(), 500);
 
             // TODO - for now it returns the first response received
-            SendLeasesReply sentLeasesReply = leaseReplies.First().Result;
-
-            return sentLeasesReply;
+            return leaseReplies.First().Result.Ack;
         }
 
 
@@ -221,7 +222,11 @@ namespace LServer.Services
 
             // if the currentLeaderId is this server, waits for promiseReplies from the majority of lservers
             if (this.serverId == currentLeaderId)
+            {
+                // TODO - maybe run BroadcastLeases asynchronously (we might want to know the result of the function, though)
+                BroadcastLeases();
                 ConsensusLeader(currentLeaderId, epoch);
+            }
 
 
             // awaits for the leader to make a prepareRequest, and sends a promiseReply
@@ -249,15 +254,10 @@ namespace LServer.Services
             // waits some time for responses
             Task.WaitAll(promisesReplies.ToArray(), 500);
 
-            foreach(var task in promisesReplies)
-            {
-                Console.WriteLine("Here is the received epoch: " + task?.Result?.Epoch);
-            }
-
             // TODO - If the promise replies are not the majority, return false
             // (Right now we're considering that we ALWAYS receive a positive reply from ALL other processes)
 
-            Console.WriteLine("I am the leader:" + serverId + ", and ran the prepare phase.");
+            Console.WriteLine("I am the leader: " + serverId + ", and ran the prepare phase.");
             // TODO - accept/propose phase
 
             // Accept Phase (Step 2)
@@ -272,6 +272,9 @@ namespace LServer.Services
             }
 
             Task.WaitAll(acceptedReplies.ToArray(), 500);
+
+            // TODO - If the accepted replies are not the majority, return false
+            // (Right now we're considering that we ALWAYS receive a positive reply from ALL other processes)
 
             Console.WriteLine("Here is the consensual queue: ");
             foreach (var lease in acceptRequest.Queue)
@@ -289,11 +292,7 @@ namespace LServer.Services
 
         public bool ConsensusAcceptor(int currentLeaderId)
         {
-            List<Task<PromiseReply>> promisesReplies = new List<Task<PromiseReply>>();
-            List<Task> tasks = new List<Task>();
-            // TODO - if false, repeat in order to select a new leader
-            Console.WriteLine("Current leader is:" + currentLeaderId + " and I am server:" + serverId);
-            //Console.WriteLine("I had no response :(");
+            // TODO - Something?
             return false;
         }
     }

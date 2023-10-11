@@ -1,4 +1,4 @@
-﻿using Google.Protobuf.Collections;
+using Google.Protobuf.Collections;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Protos;
@@ -24,7 +24,8 @@ namespace TServer.Services
         private string TManagerId;
         private Dictionary<string, string> LServers;
         private Dictionary<string, string> TServers;
-        //private Dictionary<string, int> dadInt;
+        
+        private Dictionary<string, Queue<string>> keyAccessQueue = new Dictionary<string, Queue<string>>();
 
 
         // set all the server information from config
@@ -83,11 +84,29 @@ namespace TServer.Services
 
             // TODO - Request a lease from all of the lease managers
             // not yet implemented
-            AskLeaseRequest leaseRequest = new AskLeaseRequest { TManagerId = this.TManagerId, Key = { leaseKeys }};
+            AskLeaseRequest askLeaseRequest = new AskLeaseRequest { TManagerId = this.TManagerId, Key = { leaseKeys }};
 
             // TODO - should be async, currently not
-            AskLeaseReply leaseReply = RequestLease(leaseRequest);
-            Console.WriteLine("server responded with: " + leaseReply.Ack);
+            //AskLeaseReply leaseReply = RequestLease(leaseRequest);
+
+            // requests a lease from all of the LServers
+            List<Task<AskLeaseReply>> askLeaseReplies = new List<Task<AskLeaseReply>>();
+            // for each LServer starts a task with a request
+            foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> clientInstance in this.clientInstances)
+            {
+                // for each entry in LServers, makes a request for a lease
+                AsyncUnaryCall<AskLeaseReply> leaseReply = clientInstance.Value.AskLeaseAsync(askLeaseRequest);
+                askLeaseReplies.Add(leaseReply.ResponseAsync);
+            }
+            // TODO
+            // wait for the majority of the tasks to get a response
+            // sort what it receives and return one reply to the function Transaction
+            Task.WaitAll(askLeaseReplies.ToArray(), 500);
+
+            // for now it returns the first response
+            //Console.WriteLine(leaseReplies.Count);
+            AskLeaseReply askLeaseReply = askLeaseReplies.First().Result;
+            Console.WriteLine("server responded with: " + askLeaseReply.Ack);
 
             // TODO - wait for the epoch to end (?)
 
@@ -113,30 +132,16 @@ namespace TServer.Services
 
             return reply;
         }
-
-        public AskLeaseReply RequestLease(AskLeaseRequest request)
+        
+        public SendLeasesReply SendLeases(SendLeasesRequest request)
         {
-            // requests a lease from all of the LServers
-            List<Task<AskLeaseReply>> leaseReplies = new List<Task<AskLeaseReply>>();
-            // for each LServer starts a task with a request
-            foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> clientInstance in this.clientInstances)
-            {
-                // for each entry in LServers, makes a request for a lease
-                AsyncUnaryCall<AskLeaseReply> leaseReply = clientInstance.Value.AskLeaseAsync(request);
-                leaseReplies.Add(leaseReply.ResponseAsync);
-                
-            }
-            // TODO
-            // wait for the majority of the tasks to get a response
-            // sort what it receives and return one reply to the function Transaction
-            Task.WaitAll(leaseReplies.ToArray(), 500);
+            SendLeasesReply reply = new SendLeasesReply { Ack = true };
 
-            // for now it returns the first response
-            //Console.WriteLine(leaseReplies.Count);
-            AskLeaseReply reply = leaseReplies.First().Result;
+            // TODO - Functions itself - process the ordered leases in the TManager
+
+            Console.WriteLine("Received the following number of leases: " + request.Leases.Count);
 
             return reply;
         }
-
     }
 }

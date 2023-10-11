@@ -18,20 +18,22 @@ namespace LServer.Services
 
         public override Task<PromiseReply> Prepare(PrepareRequest request, ServerCallContext context)
         {
-            Console.WriteLine("Deadline: " + context.Deadline);
+            Console.WriteLine("-----------------------");
             Console.WriteLine("Host: " + context.Host);
             Console.WriteLine("Method: " + context.Method);
             Console.WriteLine("Peer: " + context.Peer);
+            Console.WriteLine("-----------------------");
 
             return Task.FromResult(lServerService.PaxosPrepare(request));
         }
 
         public override Task<AcceptedReply> Accept(AcceptRequest request, ServerCallContext context)
         {
-            Console.WriteLine("Deadline: " + context.Deadline);
+            Console.WriteLine("-----------------------");
             Console.WriteLine("Host: " + context.Host);
             Console.WriteLine("Method: " + context.Method);
             Console.WriteLine("Peer: " + context.Peer);
+            Console.WriteLine("-----------------------");
 
             return Task.FromResult(lServerService.PaxosAccept(request));
         }

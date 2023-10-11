@@ -21,10 +21,11 @@ namespace LServer.Services
 
         public override Task<AskLeaseReply> AskLease(AskLeaseRequest request, ServerCallContext context) 
         {
-            Console.WriteLine("Deadline: " + context.Deadline);
+            Console.WriteLine("-----------------------");
             Console.WriteLine("Host: " + context.Host);
             Console.WriteLine("Method: " + context.Method);
             Console.WriteLine("Peer: " + context.Peer);
+            Console.WriteLine("-----------------------");
 
             return Task.FromResult(lServerService.ProcessLeaseRequest(request));
         }
