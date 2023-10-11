@@ -28,8 +28,8 @@ namespace LServer.Services
 
         // Paxos related atributes
         int epoch = 0;          // should be ++ in the start of consensus perhaps?
-        int readTimestamp = 0;
-        int writeTimestamp = 0;
+        int highestRoundId = 0;
+
         Queue<AskLeaseRequest> leaseRequestQueue = new Queue<AskLeaseRequest>();
         Queue<Lease> leaseQueue = new Queue<Lease>();
         List<string> pendingTManagers = new List<string>();
@@ -69,7 +69,6 @@ namespace LServer.Services
                 | |  \___ \ / _ \ '__\ \ / / _ \ '__/ __|
                 | |  ____) |  __/ |   \ V /  __/ |  \__ \
                 |_| |_____/ \___|_|    \_/ \___|_|  |___/
-
         */
         /* NewLease request by TServer
          * LServer replies with an ack, only at the end of an epoch
@@ -143,27 +142,42 @@ namespace LServer.Services
 
         public PromiseReply PaxosPrepare(PrepareRequest request)
         {
-            Console.WriteLine("Entered Paxos Prepare!");
-            List<PromiseReply> promisesReplies = new List<PromiseReply>();
-            List<Task> tasks = new List<Task>();
+            Console.WriteLine("Entered Paxos Prepare! (Step 1)");
             
             PromiseReply reply = new PromiseReply { Epoch = -1};
-            // TODO - Change epoch to the right one
-            if (request.RoundId > readTimestamp && request.RoundId > writeTimestamp)
+
+            // TODO - Consider the fact that a proposer can fail after accept,
+            // i.e fill the "previousRoundId" and "queue" fields of the promiseReply.
+            // Consider using an accept request list
+            if (request.RoundId > this.highestRoundId)
             {
-                reply = new PromiseReply { Epoch = 0, ReadTimestamp = this.readTimestamp };
+                this.highestRoundId = request.RoundId;
+                reply = new PromiseReply { Epoch = request.Epoch, RoundId = request.RoundId };
                 foreach (var leaseRequest in leaseRequestQueue)
                 {
                     Lease paxosLease = new Lease { TManagerId = leaseRequest.TManagerId };
-                    foreach (var key in leaseRequest.Key)
-                    {
-                        paxosLease.Key.Add(key);
-                    }
+                    foreach (var key in leaseRequest.Key){ paxosLease.Key.Add(key); }
                     reply.Queue.Add(paxosLease);
                 }
             }
             else
-                Console.WriteLine("Oops, roundID too low.");
+                Console.WriteLine("Oops, roundID too low in prepare phase.");
+            return reply;
+        }
+
+        public AcceptedReply PaxosAccept(AcceptRequest request) 
+        {
+            Console.WriteLine("Entered Paxos Accept! (Step 2)");
+
+            AcceptedReply reply = new AcceptedReply {  Epoch = -1 };
+
+            if (request.RoundId >= this.highestRoundId)
+            {
+                reply = new AcceptedReply { Epoch = request.Epoch, RoundId = request.RoundId };
+                foreach (var lease in request.Queue) { reply.Queue.Add(lease); }
+            }
+            else
+                Console.WriteLine("Oops, roundID too low in accept phase.");
             return reply;
         }
 
@@ -187,11 +201,9 @@ namespace LServer.Services
 
         // Clunky, and it takes too much time because of thread sleeping. Should be possible to not use that.
         // TODO - implement the prepare and accept functions as seperate functions, make it more readable
-        public void Consensus()
+        public void Consensus(int epoch)
         {
             int currentLeaderId;
-            List<Task<PromiseReply>> promisesReplies = new List<Task<PromiseReply>>();
-            List<Task> tasks = new List<Task>();
             
             // what server should be leader
 
@@ -209,22 +221,23 @@ namespace LServer.Services
 
             // if the currentLeaderId is this server, waits for promiseReplies from the majority of lservers
             if (this.serverId == currentLeaderId)
-                ConsensusLeader(promisesReplies, tasks, currentLeaderId);
+                ConsensusLeader(currentLeaderId, epoch);
 
 
             // awaits for the leader to make a prepareRequest, and sends a promiseReply
             else
-                ConsensusAcceptor(promisesReplies, tasks, currentLeaderId);
+                ConsensusAcceptor(currentLeaderId);
         }
 
-        public bool ConsensusLeader(
-            List<Task<PromiseReply>> promisesReplies,
-            List<Task> tasks,
-            int currentLeaderId) 
+        public bool ConsensusLeader(int currentLeaderId, int epoch) 
         {
-            // prepares the PrepareRequest
-            // TODO - use the right epoch and the right roundId
-            PrepareRequest prepareRequest = new PrepareRequest { Epoch = 0, ProposerId = this.serverId, RoundId = 3 };
+            List<Task<PromiseReply>> promisesReplies = new List<Task<PromiseReply>>();
+            List<Task<AcceptedReply>> acceptedReplies = new List<Task<AcceptedReply>>();
+            //List<Task> tasks = new List<Task>();
+
+            // Prepare Phase (Step 1)
+            int currentRoundId = this.highestRoundId + 1;
+            PrepareRequest prepareRequest = new PrepareRequest { Epoch = epoch, ProposerId = this.serverId, RoundId = currentRoundId };
 
             foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
             {
@@ -238,26 +251,46 @@ namespace LServer.Services
 
             foreach(var task in promisesReplies)
             {
-                Console.WriteLine("HERE IS THE TASK RESULT: " + task?.Result?.Epoch);
+                Console.WriteLine("Here is the received epoch: " + task?.Result?.Epoch);
             }
 
-            // End of debug
-
-            // If the promise replies are not the majority, return false
-            // TODO - review the way the majority is calculated
+            // TODO - If the promise replies are not the majority, return false
+            // (Right now we're considering that we ALWAYS receive a positive reply from ALL other processes)
 
             Console.WriteLine("I am the leader:" + serverId + ", and ran the prepare phase.");
             // TODO - accept/propose phase
 
+            // Accept Phase (Step 2)
+            // TODO - Only send accept after receiving a promise majority
+            AcceptRequest acceptRequest = new AcceptRequest { Epoch = epoch, RoundId = currentRoundId };
+            foreach (var lease in leaseQueue) { acceptRequest.Queue.Add(lease); }
+
+            foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
+            {
+                AsyncUnaryCall<AcceptedReply> acceptedReply = lServerInstances.Value.AcceptAsync(acceptRequest);
+                acceptedReplies.Add(acceptedReply.ResponseAsync);
+            }
+
+            Task.WaitAll(acceptedReplies.ToArray(), 500);
+
+            Console.WriteLine("Here is the consensual queue: ");
+            foreach (var lease in acceptRequest.Queue)
+            {
+                Console.Write(lease.TManagerId + lease.Key + "\n");
+            }
+
+            // TODO - If a majority is received, send consensual queue to TManagers
+
+            // TODO - Only reset queue if consensus succeded
+            leaseQueue = new Queue<Lease>();
+            highestRoundId = currentRoundId;
             return true;
         }
 
-        public bool ConsensusAcceptor(
-            List<Task<PromiseReply>> promisesReplies,
-            List<Task> tasks,
-            int currentLeaderId)
+        public bool ConsensusAcceptor(int currentLeaderId)
         {
-
+            List<Task<PromiseReply>> promisesReplies = new List<Task<PromiseReply>>();
+            List<Task> tasks = new List<Task>();
             // TODO - if false, repeat in order to select a new leader
             Console.WriteLine("Current leader is:" + currentLeaderId + " and I am server:" + serverId);
             //Console.WriteLine("I had no response :(");

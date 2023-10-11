@@ -15,9 +15,10 @@ message PrepareRequest {
 }
 
 message PromiseReply {
-	repeated protos.Lease queue = 1;
-	int32 readTimestamp = 2;
-	int32 epoch = 3;
+	int32 roundId = 1;
+	int32 previousRoundId = 2;
+	repeated protos.Lease queue = 3;
+	int32 epoch = 4;
 }
 
 message AcceptRequest {
@@ -27,7 +28,7 @@ message AcceptRequest {
 }
 
 message AcceptedReply {
-	int32 value = 1;
-	int32 writeTimestamp = 2;
+	int32 roundId = 1;
+	repeated protos.Lease queue = 2;
 	int32 epoch = 3;
 }

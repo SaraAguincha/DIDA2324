@@ -19,7 +19,7 @@ using System.Text.RegularExpressions;
         epoch++;
         Console.WriteLine("Advanced to epoch number " + epoch.ToString());
         LServerService lServerService = (LServerService)state;
-        lServerService.Consensus();
+        lServerService.Consensus(epoch);
     }
     public static async Task Main(string[] args)
     {
