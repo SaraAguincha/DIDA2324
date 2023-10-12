@@ -5,7 +5,7 @@ using Protos;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
-// Lease Server Main
+// Lease Server
     class Program
 {
     // Current epoch (has to be global variable)

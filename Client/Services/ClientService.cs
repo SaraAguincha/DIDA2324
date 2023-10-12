@@ -12,47 +12,59 @@ namespace Client.Services
 {
     public class ClientService : ClientTServerService.ClientTServerServiceBase
     {
-        private readonly GrpcChannel channel;
-        private readonly ClientTServerService.ClientTServerServiceClient client;
-        private string hostname;
         private string clientId;
-        public Server server;
+        private Dictionary<string, ClientTServerService.ClientTServerServiceClient> tServers;
+        private ClientTServerService.ClientTServerServiceClient server;
 
-        // TODO - add and set the other necessary information, clientId, TServers
-        public ClientService(string clientId, string serverHostname, string clientHostname)
+        public ClientService(string ClientId, Dictionary<string, ClientTServerService.ClientTServerServiceClient> TServers)
         {
-            AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
+            this.clientId = ClientId;
+            this.tServers = TServers;
 
-            // setup the client side
-            this.hostname = clientHostname;
-            this.clientId = clientId;
-            channel = GrpcChannel.ForAddress(serverHostname);
-            client = new ClientTServerService.ClientTServerServiceClient(channel);
+            // Pick a random TServer to send the request (DEFAULT)
+            Random random = new Random();
+            int index = random.Next(TServers.Count);
+            this.server = TServers.ElementAt(index).Value;
+            Console.WriteLine("Client " + clientId + " connected to TServer " + TServers.ElementAt(index).Key);
+
+            // (FOR TESTING PURPOSES) THIS PICKS THE FIRST TSERVER, UNCOMMENT/COMMENT THE ABOVE LINES AND THIS ONE TO CHANGE THIS
+            //this.server = TServers.ElementAt(0).Value;
         }
 
-        // Client Commands
         // Asynchronous TxSubmit call
         public async Task<RepeatedField<DadInt>> TxSubmit(List<string> reads, List<DadInt> writes)
         {
             TxSubmitRequest request = new TxSubmitRequest { ClientId = this.clientId, Key = { reads }, DadInts = { writes } };
-            TxSubmitReply reply = await client.TxSubmitAsync(request);
 
-            return reply.DadInts;
+            // Perform a try catch to submit the transaction and catch exceptions
+            try
+            {
+                TxSubmitReply reply = await server.TxSubmitAsync(request);
+                return reply.DadInts;
+            }
+            catch (Grpc.Core.RpcException e)
+            {
+                Console.WriteLine("TxSubmit Error: " + e.Message);
+                return null;
+            }
         }
 
-
-        // TODO - change for async, catch exceptions
-        public bool Status()
+        // Asynchronous Status call
+        public async Task<bool> Status()
         {
             StatusRequest request = new StatusRequest { Ok = true };
-            StatusReply reply = client.Status(request);
 
-            return reply.Status;
-        }
-
-        public void ServerShutdown()
-        {
-            server.ShutdownAsync().Wait();
+            // Perform a try catch to submit the status request and catch exceptions
+            try
+            {
+                StatusReply reply = await server.StatusAsync(request);
+                return reply.Status;
+            }
+            catch (Grpc.Core.RpcException e)
+            {
+                Console.WriteLine("Status Error: " + e.Message);
+                return false;
+            }
         }
     }
 }
