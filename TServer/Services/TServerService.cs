@@ -24,6 +24,7 @@ namespace TServer.Services
         private string TManagerId;
         private Dictionary<string, string> LServers;
         private Dictionary<string, string> TServers;
+        private Dictionary<string, DadInt> dadInts = new Dictionary<string, DadInt> ();
         
         private Dictionary<string, Queue<string>> keyAccessQueue = new Dictionary<string, Queue<string>>();
 
@@ -82,8 +83,6 @@ namespace TServer.Services
                     leaseKeys.Add(dadInt.Key);
             }
 
-            // TODO - Request a lease from all of the lease managers
-            // not yet implemented
             AskLeaseRequest askLeaseRequest = new AskLeaseRequest { TManagerId = this.TManagerId, Key = { leaseKeys }};
 
             // TODO - should be async, currently not
@@ -105,14 +104,14 @@ namespace TServer.Services
 
             // for now it returns the first response
             AskLeaseReply askLeaseReply = askLeaseReplies.First().Result;
-            Console.WriteLine("server responded with: " + askLeaseReply.Ack);
+            Console.WriteLine("server response to askLease: " + askLeaseReply.Ack);
 
-            // TODO - not sure if they should or shouldn't wait
-            // waits for access to the keys in question . . .
-            int numberLeasesNeeded = leaseKeys.Count;
-            
             // TODO - wait for the access to the keys
-            /*for (int i = 0; i < numberLeasesNeeded; i++)
+            // SHOULD ALWAYS WORK! - add a way to forcefully break and get a lease (in case a TM crashes while having it)
+            // HERE BLOCKS!
+            int numberLeasesNeeded = leaseKeys.Count;
+
+            for (int i = 0; i < numberLeasesNeeded;)
             {
                 if (keyAccessQueue.ContainsKey(leaseKeys[i]))
                 {
@@ -120,10 +119,30 @@ namespace TServer.Services
                     if (firstInQueue == TManagerId)
                         i++;
                 }
-            }*/
+            }
 
-            // currently responds with the dadints from writes
-            TxSubmitReply reply = new TxSubmitReply { DadInts = { writes } };
+            // when all of the keys are covered by the lease (always after the for)
+            // updates/adds the DadInts from the write part of the transaction
+            foreach (DadInt dInt in writes)
+            {
+                if (dadInts.ContainsKey(dInt.Key))
+                    dadInts[dInt.Key] = dInt;
+                else
+                    dadInts.Add(dInt.Key, new DadInt (dInt));
+            }
+
+            // Transaction reply is only about the reads
+            // if there is no DadInt to read, returns empty
+            List<DadInt> dadIntsToReply = new List<DadInt>();
+            foreach (string key in reads)
+            {
+                if (dadInts.ContainsKey(key))
+                    dadIntsToReply.Add(dadInts[key]);
+            }
+
+            // responds with the DadInts the client wants to read
+            // If it they do not exist, returns an empty list
+            TxSubmitReply reply = new TxSubmitReply { DadInts = { dadIntsToReply } };
 
             // TODO before replying broadcast to the other TServers and update the DadInts values
 
@@ -174,7 +193,7 @@ namespace TServer.Services
                     }
                 }
                 // DEBUG    ----------------------------------------------------------
-                foreach (KeyValuePair<string,Queue<string>> keyA in keyAccessQueue)
+                /*foreach (KeyValuePair<string,Queue<string>> keyA in keyAccessQueue)
                 {
                     Console.WriteLine("Lease with name: " + keyA.Key + "\n");
                     foreach (string id in keyA.Value)
@@ -182,7 +201,7 @@ namespace TServer.Services
                         Console.WriteLine("Has this TManagers waiting: " + id);
                     }
                 }
-                //          ----------------------------------------------------------
+                //          ----------------------------------------------------------*/
             }
             return reply;
         }
