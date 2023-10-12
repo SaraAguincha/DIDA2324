@@ -104,11 +104,23 @@ namespace TServer.Services
             Task.WaitAll(askLeaseReplies.ToArray(), 500);
 
             // for now it returns the first response
-            //Console.WriteLine(leaseReplies.Count);
             AskLeaseReply askLeaseReply = askLeaseReplies.First().Result;
             Console.WriteLine("server responded with: " + askLeaseReply.Ack);
 
-            // TODO - wait for the epoch to end (?)
+            // TODO - not sure if they should or shouldn't wait
+            // waits for access to the keys in question . . .
+            int numberLeasesNeeded = leaseKeys.Count;
+            
+            // TODO - wait for the access to the keys
+            /*for (int i = 0; i < numberLeasesNeeded; i++)
+            {
+                if (keyAccessQueue.ContainsKey(leaseKeys[i]))
+                {
+                    string firstInQueue = keyAccessQueue[leaseKeys[i]].Peek();
+                    if (firstInQueue == TManagerId)
+                        i++;
+                }
+            }*/
 
             // currently responds with the dadints from writes
             TxSubmitReply reply = new TxSubmitReply { DadInts = { writes } };
@@ -133,6 +145,8 @@ namespace TServer.Services
             return reply;
         }
         
+        // when the LServer leader broadcasts its leaseQueue, TServer receives it
+        // and populates their own access lease dictionary
         public SendLeasesReply SendLeases(SendLeasesRequest request)
         {
             SendLeasesReply reply = new SendLeasesReply { Ack = true };
@@ -140,7 +154,36 @@ namespace TServer.Services
             // TODO - Functions itself - process the ordered leases in the TManager
 
             Console.WriteLine("Received the following number of leases: " + request.Leases.Count);
-
+            
+            // populate the keyAccess dictionary
+            // TODO - verify if it is populated in the right order
+            if (request.Leases.Count > 0) { 
+                foreach (Lease lease in request.Leases)
+                {
+                    // for each key present in one lease, verify if the dictionary already has an entry
+                    // if it hasn't, add a new entry with that key
+                    // if it has, only adds the Tmanager to the Queue
+                    foreach (string key in lease.Key)
+                    {
+                        if (keyAccessQueue.ContainsKey(key))
+                        {
+                            keyAccessQueue[key].Enqueue(lease.TManagerId);
+                        }
+                        else
+                            keyAccessQueue.Add(key, new Queue<string> (new [] { lease.TManagerId }));
+                    }
+                }
+                // DEBUG    ----------------------------------------------------------
+                foreach (KeyValuePair<string,Queue<string>> keyA in keyAccessQueue)
+                {
+                    Console.WriteLine("Lease with name: " + keyA.Key + "\n");
+                    foreach (string id in keyA.Value)
+                    {
+                        Console.WriteLine("Has this TManagers waiting: " + id);
+                    }
+                }
+                //          ----------------------------------------------------------
+            }
             return reply;
         }
     }

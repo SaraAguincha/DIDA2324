@@ -117,6 +117,8 @@ namespace LServer.Services
 
             List<Task<SendLeasesReply>> leaseReplies = new List<Task<SendLeasesReply>>();
 
+            Console.WriteLine("Lease request has :" + leaseRequest.Leases.Count + " leases.");
+
             // Sends the list to every TManager that has sent a request
             foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> tServerInstances in this.tServerInstances)
             {
@@ -241,6 +243,7 @@ namespace LServer.Services
             //List<Task> tasks = new List<Task>();
 
             // Prepare Phase (Step 1)
+            // should not be necessary to do a prepare phase in every epoch
             int currentRoundId = this.highestRoundId + 1;
             PrepareRequest prepareRequest = new PrepareRequest { Epoch = epoch, ProposerId = this.serverId, RoundId = currentRoundId };
 
@@ -285,7 +288,7 @@ namespace LServer.Services
             // TODO - If a majority is received, send consensual queue to TManagers
 
             // TODO - Only reset queue if consensus succeded
-            leaseQueue = new Queue<Lease>();
+            //leaseQueue = new Queue<Lease>();
             highestRoundId = currentRoundId;
             return true;
         }
