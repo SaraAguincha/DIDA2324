@@ -21,8 +21,8 @@ P LM3 L http://127.0.0.1:20003
 # A client (indicated by the 'C' process code) does not have a g-RPC URL,
 # but has a path to the client script it is running.
 P c1 C client-script-1
-P c2 C another-script
-P c3 C one_more_script
+# P c2 C another-script
+# P c3 C one_more_script
 # P c4 C cs4
 # P c5 C cs5
 # P c6 C cs6

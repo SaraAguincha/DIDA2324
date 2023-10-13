@@ -3,61 +3,41 @@ using Grpc.Net.Client;
 using Protos;
 using System.Text.RegularExpressions;
 using TServer.Services;
+using Utilities;
 
 // Transaction Server
 class Program
 {
     public static void Main(string[] args)
-    {
-        // parsing according to config file
-        // a TServer will be given the following information:
-        // "TM1 T http://localhost:10001"
-        // additional information is needed:
-        //  - number of processes running and respective ids and URL
-
-        /*  WHEN CONFIG WORKS
-        string arguments = Console.ReadLine();          //unnecessary when script implemented
-        string[] initialArgs = arguments.Split(" ");    //unnecessary when script implemented
-
-
-        string TManagerId = initialArgs[0];            //args[0] when script implemented
-
-        string urlPattern = @"http://([^:/]+):(\d+)";
-        Match match = Regex.Match(initialArgs[2], urlPattern);
-
-        string hostname = match.Groups[1].Value;            // group 1 will contain the IP address
-        int port = Int32.Parse(match.Groups[2].Value);      // group 2 will contain the port
- 
-        */
-
-        // placeholder information  ----------------------------------------------
-        //string hostname = "localhost";
-        //int port = 10001;
-        //string TManagerId = "TM1";
-        Dictionary<string, string> tServers = new Dictionary<string, string>();
-        Dictionary<string, string> lServers = new Dictionary<string, string>();
-        lServers.Add("LM1", "http://localhost:20001");
-        lServers.Add("LM2", "http://localhost:20002");
-        lServers.Add("LM3", "http://localhost:20003");
-
-        // ------------------------------------------------------------------------
-
+    {   
         // Server configuration
         string processId = args[0];
         string hostname = args[1];
         int port = Int32.Parse(args[2]);
 
-        // Server id in int format for Paxos
-        char lastChar = processId[processId.Length - 1];
-        int serverId = Int32.Parse(lastChar.ToString());
-
         ServerPort serverPort;
         serverPort = new ServerPort(hostname, port, ServerCredentials.Insecure);
+        
+        // Receive info from the configuration file
+        ServersConfig config = Resources.ParseConfigFile();
 
-        // all the functions of the TServer will be done here
-        TServerService tServerService = new TServerService(processId, lServers, lServers);
+        // Get the list of TServer and LServer processes and add them to a dictionary
+        Dictionary<string, string> tServers = new Dictionary<string, string>();
+        Dictionary<string, string> lServers = new Dictionary<string, string>();
 
-        // all of the function call async related to clients, tservers and lservers
+        foreach (ServerProcessInfo tServer in config.TServers)
+        {
+            tServers.Add(tServer.Id, tServer.Url);
+        }
+        foreach (ServerProcessInfo lServer in config.LServers)
+        {
+            lServers.Add(lServer.Id, lServer.Url);
+        }
+
+        // All the functions of the TServer will be done here
+        TServerService tServerService = new TServerService(processId, tServers, lServers);
+
+        // All of the function call async related to clients, tservers and lservers
         TServerService_Client clientService = new TServerService_Client(tServerService);
 
         TServerService_LServer lServerService = new TServerService_LServer(tServerService);
@@ -71,7 +51,7 @@ class Program
 
         server.Start();
 
-        //Configuring HTTP for client connections in Register method
+        // Configuring HTTP for client connections in Register method
         AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
         
         Console.WriteLine("Server is running on port: " + port + " and is ready to accept requests...");

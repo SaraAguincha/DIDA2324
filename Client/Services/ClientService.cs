@@ -22,14 +22,14 @@ namespace Client.Services
             this.tServers = TServers;
 
             // Pick a random TServer to send the request (DEFAULT)
-            //Random random = new Random();
-            //int index = random.Next(TServers.Count);
-            //this.server = TServers.ElementAt(index).Value;
-            //Console.WriteLine("Client " + clientId + " connected to TServer " + TServers.ElementAt(index).Key);
+            Random random = new Random();
+            int index = random.Next(TServers.Count);
+            this.server = TServers.ElementAt(index).Value;
+            Console.WriteLine("Client " + clientId + " connected to TServer " + TServers.ElementAt(index).Key);
 
             // (FOR TESTING PURPOSES) THIS PICKS THE FIRST TSERVER, UNCOMMENT/COMMENT THE ABOVE LINES AND THIS ONE TO CHANGE THIS
-            this.server = TServers.ElementAt(0).Value;
-            Console.WriteLine("Client " + clientId + " connected to TServer " + TServers.ElementAt(0).Key);
+            //this.server = TServers.ElementAt(0).Value;
+            //Console.WriteLine("Client " + clientId + " connected to TServer " + TServers.ElementAt(0).Key);
 
         }
 

@@ -4,13 +4,7 @@ using Google.Protobuf.Collections;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Protos;
-using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
-using System;
-using System.Threading.Tasks;
-using System.IO;
-using System.Collections.Generic;
-using System.Linq;
 using Utilities;
 
 
@@ -153,8 +147,85 @@ class Program
                     break;
             }
         }
-        // Wait until a key press to close the console
-        Console.WriteLine("Press any key to exit...");
-        Console.ReadKey();
+        // FOR TESTING PURPOSES, ACCEPTING INPUT FROM THE CONSOLE
+        Console.WriteLine("Now accepting input from user...");
+        while (true)
+        {
+            // Parsing according to the config files
+            // First char will be the command to be executed!
+
+            switch (Console.ReadKey().KeyChar)
+            {
+                // Transaction command, will have a list of DadInts to read and to write (may be empty)
+                // has the following format:
+                // T ("a-key-name","another-key-name") (<"name1",10>,<"name2",20>) 
+                case 'T': case 't':
+                    string readCommand = Console.ReadLine();
+                    // string with two elements, list of reads and list of writes
+                    string[] operations = Regex.Split(readCommand, @"\s+");
+
+                    if (operations == null || operations?.Length != 3)
+                    {
+                        Console.WriteLine("Invalid number of arguments.");
+                        break;
+                    }
+
+                    // List of dadInts to read and to write
+                    List<string> reads = new List<string>();
+                    List<DadInt> writes = new List<DadInt>();
+
+                    string readPattern = @"""(.*?)""";
+                    string writePattern = @"<""([0-9a-zA-Z-:_]*?)\"",(\d+)>";
+
+                    Regex readRegex = new Regex(readPattern);
+                    Regex writeRegex = new Regex(writePattern);
+
+                    // Iterate through matches and add them to write and read list
+                    foreach (Match match in readRegex.Matches(operations[1]))
+                    {
+                        //Groups[1] is the string between the quotes
+                        reads.Add(match.Groups[1].Value);
+                    }
+                    foreach (Match match in writeRegex.Matches(operations[2]))
+                    {
+                        DadInt dadInt = new DadInt();
+                        // Group[1] holds the key, Group[2] holds the value
+                        dadInt.Key = match.Groups[1].Value;
+                        if (Int32.TryParse(match.Groups[2].Value, out int intValue)) { dadInt.Val = intValue; }
+                        writes.Add(dadInt);
+                    }
+                    //Console.WriteLine("Reads: " + reads.Count + "\nWrites: " + writes.Count);
+                    //Console.WriteLine(reads[0] + "\n" + reads[1]);
+                    //Console.WriteLine(writes[0].Key + "\n" + writes[1].Key);
+                    RepeatedField<DadInt> txReply = client.TxSubmit(reads, writes).Result;
+
+                    if (txReply == null) { break; }
+
+                    foreach (DadInt reply in txReply)
+                    {
+                        // when the transaction is not realised, a DadInt with key == abort is returned
+                        if (reply.Key == "abort")
+                        {
+                            Console.WriteLine("Something went wrong during the transaction.. Please repeat again.");
+                            break;
+                        }
+                        Console.WriteLine($"DadInt with Id: {reply.Key}");
+                        Console.WriteLine($"Has Value: {reply.Val}");
+                    }
+
+                    break;
+
+                // Status command
+                // TODO, not sure what the key for this command is, not specified
+                case 'S': case 's':
+                    Console.WriteLine();
+                    bool statReply = client.Status().Result;
+                    Console.WriteLine("server responded with: " + statReply);
+                    break;
+                default:
+                    Console.WriteLine("no command found :(");
+                    break;
+            }
+        }
     }
 }
