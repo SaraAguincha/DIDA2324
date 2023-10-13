@@ -141,11 +141,12 @@ namespace ManagementConsole
             }
 
             // Give the choice to the user to stop all the processes or to exit the management console
-            Console.WriteLine("Press 's' to stop all processes or 'q' to quit the management console.");
+            Console.WriteLine("Press 's' to stop all processes, 'p' to restart all processes or 'q' to quit the management console.");
             while (true)
             {
                 switch (Console.ReadKey().KeyChar)
                 {
+                    // Stop all processes
                     case 's':
                         Process[] processes = Process.GetProcessesByName("Client");
                         foreach (Process process in processes)
@@ -164,8 +165,21 @@ namespace ManagementConsole
                         }
                         Console.WriteLine("\nStopped all processes.");
                         break;
+                    // Close the management console
                     case 'q':
                         return;
+                    // Restart all processes
+                    case 'p':
+                        foreach (string line in File.ReadAllLines(configFile))
+                        {
+                            string[] arguments = line.Split(" ");
+                            if (arguments[0] == "P")
+                            {
+                                StartNewProcess(arguments);
+                            }
+                        }
+                        Console.WriteLine("\nRestarted all processes.");
+                        break;
                     default:
                         Console.WriteLine("\nInvalid command.");
                         break;
