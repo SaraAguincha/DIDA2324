@@ -13,6 +13,12 @@ class Program
 {
     public static void Main(string[] args)
     {
+        // Sleep until the specified time on args[2]
+        TimeSpan waitToStart = DateTime.Parse(args[2]).Subtract(DateTime.Now);
+        Console.WriteLine("Waiting for " + waitToStart.TotalMilliseconds + " milliseconds.");
+        System.Threading.Thread.Sleep(waitToStart);
+
+        // Configuring HTTP for client connections in Register method
         AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
         
         // Client configuration
@@ -40,10 +46,6 @@ class Program
         string solutionDir = Resources.GetSolutionDirectoryInfo();
         string scriptPath = solutionDir + "\\Client\\Scripts\\" + script + ".txt";
         Console.WriteLine("Script path: " + scriptPath);
-        
-        // Wait until the the time slot starts
-        // TODO hardcoded for now cause still not sure how to incorporate the start time
-        System.Threading.Thread.Sleep(3000);
 
         // Read and parse the client script
         string[] lines = File.ReadAllLines(scriptPath);

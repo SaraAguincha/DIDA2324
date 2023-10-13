@@ -21,7 +21,7 @@ namespace ManagementConsole
             return Process.Start(processInfo);
         }
 
-        static Process StartNewProcess(string[] args)
+        static Process StartNewProcess(string[] args, DateTime startTime)
         {
             // Starts a new process with the given arguments
             // Returns the process
@@ -32,8 +32,7 @@ namespace ManagementConsole
 
             if (args[2] == "C")
             {
-                string info = args[1] + " " + args[3];
-                return SetProcessInfo(clientPath, info);
+                return SetProcessInfo(clientPath, args[1] + " " + args[3] + " " + startTime.ToString("HH:mm:ss"));
             }
             else if (args[2] == "T" || args[2] == "L")
             {
@@ -43,11 +42,11 @@ namespace ManagementConsole
 
                 if (args[2] == "T")
                 {
-                    return SetProcessInfo(tServerPath, args[1] + " " + hostname + " " + port);
+                    return SetProcessInfo(tServerPath, args[1] + " " + hostname + " " + port + " " + startTime.ToString("HH:mm:ss"));
                 }
                 else
                 {
-                    return SetProcessInfo(lServerPath, args[1] + " " + hostname + " " + port);
+                    return SetProcessInfo(lServerPath, args[1] + " " + hostname + " " + port + " " + startTime.ToString("HH:mm:ss"));
                 }
             }
             else
@@ -130,13 +129,19 @@ namespace ManagementConsole
             }
             Console.WriteLine("Build successful.");
 
+            // Get the current time and add 5 secs to it
+            DateTime currentTime = DateTime.Now;
+            DateTime startTime = currentTime.AddSeconds(5);
+            Console.WriteLine("Current time: " + currentTime.ToString("HH:mm:ss") + "\n" +
+                "Start time: " + startTime.ToString("HH:mm:ss") + "\n");
+
             // Parses the configuration file and starts the processes
             foreach (string line in File.ReadAllLines(configFile))
             {
                 string[] arguments = line.Split(" ");
                 if (arguments[0] == "P")
                 {
-                    StartNewProcess(arguments);
+                    StartNewProcess(arguments, startTime);
                 }
             }
 
@@ -170,12 +175,15 @@ namespace ManagementConsole
                         return;
                     // Restart all processes
                     case 'p':
+                        currentTime = DateTime.Now;
+                        startTime = currentTime.AddSeconds(5);
+
                         foreach (string line in File.ReadAllLines(configFile))
                         {
                             string[] arguments = line.Split(" ");
                             if (arguments[0] == "P")
                             {
-                                StartNewProcess(arguments);
+                                StartNewProcess(arguments, startTime);
                             }
                         }
                         Console.WriteLine("\nRestarted all processes.");

@@ -23,6 +23,11 @@ class Program
     }
     public static async Task Main(string[] args)
     {
+        // Sleep until the specified time on args[3]
+        TimeSpan waitToStart = DateTime.Parse(args[3]).Subtract(DateTime.Now);
+        Console.WriteLine("Waiting for " + waitToStart.TotalMilliseconds + " milliseconds.");
+        System.Threading.Thread.Sleep(waitToStart);
+
         // Server configuration
         string processId = args[0];
         string hostname = args[1];
