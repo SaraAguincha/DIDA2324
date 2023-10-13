@@ -97,6 +97,12 @@ class Program
 
                     if (txReply == null) { break; }
 
+                    if (txReply.Count == 0)
+                    {
+                        Console.WriteLine("Transaction with no reads available.");
+                        break;
+                    }
+
                     foreach (DadInt reply in txReply)
                     {
                         // When the transaction is not completed, a DadInt with key == abort is returned
@@ -200,6 +206,12 @@ class Program
                     RepeatedField<DadInt> txReply = client.TxSubmit(reads, writes).Result;
 
                     if (txReply == null) { break; }
+
+                    if (txReply.Count == 0) 
+                    { 
+                        Console.WriteLine("Transaction with no reads available."); 
+                        break;
+                    }
 
                     foreach (DadInt reply in txReply)
                     {

@@ -17,7 +17,7 @@ namespace LServer.Services
         private int serverId;      // needed in order to select the leader
         private int leaderId;
 
-        private List<int> lServersId = new List<int> {1,2,3};
+        private List<int> lServersId;
 
         private Dictionary<string, GrpcChannel> channels = new Dictionary<string, GrpcChannel>();
         private Dictionary<string, PaxosService.PaxosServiceClient> lServerInstances = new Dictionary<string, PaxosService.PaxosServiceClient>();
@@ -34,12 +34,14 @@ namespace LServer.Services
         Queue<Lease> leaseQueue = new Queue<Lease>();
         List<string> pendingTManagers = new List<string>();
 
-        public LServerService(string lManagerID, int serverId, Dictionary<string, string> lServers, Dictionary<string, string> tServers) 
+        public LServerService(string lManagerID, int serverId, Dictionary<string, string> lServers, 
+            Dictionary<string, string> tServers, List<int> LServersId) 
         {
             this.lManagerID = lManagerID;
             this.LServers = lServers;
             this.TServers = tServers;
             this.serverId = serverId;
+            this.lServersId = LServersId;
             this.leaderId = 0;          // LeaderId is always > 0 ((for now))
             
             
@@ -226,8 +228,8 @@ namespace LServer.Services
             if (this.serverId == currentLeaderId)
             {
                 // TODO - maybe run BroadcastLeases asynchronously (we might want to know the result of the function, though)
-                BroadcastLeases();
                 ConsensusLeader(currentLeaderId, epoch);
+                BroadcastLeases();
             }
 
 

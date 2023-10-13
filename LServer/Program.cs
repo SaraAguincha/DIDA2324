@@ -48,7 +48,14 @@ class Program
         }
 
         // Get process id in int format by matching the processId string to the id on the list of lServers
-        int serverId = config.LServers.FindIndex(x => x.Id == processId);
+        int serverId = config.LServers.FindIndex(x => x.Id == processId) + 1;
+
+        // Get all process ids in int format by matching the processId string to the id on the list of tServers and add to a list
+        List<int> lServerIds = new List<int>();
+        foreach (string lServerId in lServers.Keys)
+        {
+            lServerIds.Add(config.LServers.FindIndex(x => x.Id == lServerId) + 1);
+        }
 
         // Get the slot duration and start time
         TimeSpan start = config.Slot.Item1;
@@ -56,7 +63,7 @@ class Program
 
         // All the functions of the LServer will be done here
         lServers.Remove(processId);
-        LServerService lServerService = new LServerService(processId, serverId, lServers, tServers);
+        LServerService lServerService = new LServerService(processId, serverId, lServers, tServers, lServerIds);
 
         // All of the function call async related to clients, tservers and lservers
         LServerService_TServer tServerService = new LServerService_TServer(lServerService);
