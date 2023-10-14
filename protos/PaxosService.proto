@@ -31,4 +31,5 @@ message AcceptedReply {
 	int32 roundId = 1;
 	repeated protos.Lease queue = 2;
 	int32 epoch = 3;
+	int32 serverId = 4;
 }

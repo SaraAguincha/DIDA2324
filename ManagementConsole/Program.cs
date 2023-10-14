@@ -131,7 +131,7 @@ namespace ManagementConsole
 
             // Get the current time and add 5 secs to it
             DateTime currentTime = DateTime.Now;
-            DateTime startTime = currentTime.AddSeconds(5);
+            DateTime startTime = currentTime.AddSeconds(10);
             Console.WriteLine("Current time: " + currentTime.ToString("HH:mm:ss") + "\n" +
                 "Start time: " + startTime.ToString("HH:mm:ss") + "\n");
 
