@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Utilities;
 
 namespace LServer.Services
 {
@@ -27,9 +28,10 @@ namespace LServer.Services
         private Dictionary<string, string> LServers;
         private Dictionary<string, string> TServers;
 
+        private Dictionary<string, ServerProcessState>[] processStates;
 
         // Paxos related atributes
-        int epoch = 0;          // should be ++ in the start of consensus perhaps?
+        int epoch = 0;
         int highestRoundId = 0;
         bool isLeaderDead = false;
 
@@ -37,13 +39,14 @@ namespace LServer.Services
         Queue<Lease> leaseQueue = new Queue<Lease>();
 
         public LServerService(string lManagerID, int serverId, Dictionary<string, string> lServers, 
-            Dictionary<string, string> tServers, List<int> LServersId) 
+            Dictionary<string, string> tServers, List<int> LServersId, Dictionary<string, ServerProcessState>[] ProcessStates) 
         {
             this.lManagerID = lManagerID;
             this.LServers = lServers;
             this.TServers = tServers;
             this.serverId = serverId;
             this.lServersId = LServersId;
+            this.processStates = ProcessStates;
             this.leaderId = 0;          // LeaderId is always > 0 ((for now))
            
             
@@ -219,6 +222,29 @@ namespace LServer.Services
          */
         public void Consensus(int epoch)
         {
+            // Update the epoch
+            this.epoch = epoch;
+
+            // Get the suspected lServers from the processStates and add them to the list
+            if (processStates[epoch - 1] != null)
+            {
+                foreach (KeyValuePair<string, ServerProcessState> server in this.processStates[epoch - 1])
+                {
+                    // Chech which entry is the current server
+                    if (server.Key == this.lManagerID && server.Value.Suspects.Item1)
+                    {
+                        // Add the suspected servers to the list by their last character
+                        foreach (string suspect in server.Value.Suspects.Item2)
+                        {
+                            if (!this.lServersSuspected.Contains(Int32.Parse(suspect.Substring(suspect.Length - 1))))
+                            {
+                                this.lServersSuspected.Add(Int32.Parse(suspect.Substring(suspect.Length - 1)));
+                            }
+                        }
+                    }
+                }
+            }
+
             // Leader verification
             
             int currentLeaderId = -1;
@@ -267,7 +293,10 @@ namespace LServer.Services
                 // if leader is dead, add to the suspected list
                 if (this.isLeaderDead)
                 {
-                    this.lServersSuspected.Add(this.leaderId);
+                    if (!this.lServersSuspected.Contains(this.leaderId))
+                    {
+                        this.lServersSuspected.Add(this.leaderId);
+                    }
                 }
                 else
                     Console.WriteLine("Everything is fine, Leader is alive and responsive!");
@@ -376,7 +405,7 @@ namespace LServer.Services
             }
             
             // TODO - maybe not do it here
-            // reviews the suspected servers
+            // Reviews the suspected servers
             foreach (AcceptedReply acceptedReply in acceptedReplies)
             {
                 if (this.lServersSuspected.Contains(acceptedReply.ServerId))
@@ -398,7 +427,7 @@ namespace LServer.Services
         public bool ConsensusAcceptor(int currentLeaderId)
         {
             // if doesn't receive any accept/prepare from the leader in the beginning of the epoch
-            // the it returns false
+            // then it returns false
             Thread.Sleep(500);
             if (isLeaderDead)
             {

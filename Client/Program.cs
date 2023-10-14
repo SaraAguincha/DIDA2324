@@ -36,8 +36,10 @@ class Program
             {   GrpcChannel channel = GrpcChannel.ForAddress(value.Url);
                 return new ClientTServerService.ClientTServerServiceClient(channel);
             }
-        );
-        (TimeSpan startTime, int duration) = config.Slot;
+        );  
+
+        // Get the slot duration
+        int duration = config.Slot.Item2;
 
         // Create the client service
         ClientService client = new ClientService(processId, tServers);

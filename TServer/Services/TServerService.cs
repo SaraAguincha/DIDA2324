@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using Utilities;
 
 // All of the services that the Tserver does
 namespace TServer.Services
@@ -25,16 +26,21 @@ namespace TServer.Services
         private Dictionary<string, string> LServers;
         private Dictionary<string, string> TServers;
         private Dictionary<string, DadInt> dadInts = new Dictionary<string, DadInt> ();
+        private List<int> tServersSuspected = new List<int>();
         
         private Dictionary<string, Queue<string>> keyAccessQueue = new Dictionary<string, Queue<string>>();
 
+        private Dictionary<string, ServerProcessState>[] processStates;
+
 
         // set all the server information from config
-        public TServerService(string TManagerId, Dictionary<string, string> TServers, Dictionary<string, string> LServers)
+        public TServerService(string TManagerId, Dictionary<string, string> TServers, Dictionary<string, string> LServers,
+            Dictionary<string, ServerProcessState>[] ProcessStates)
         {
             this.TManagerId = TManagerId;
             this.TServers = TServers;
             this.LServers = LServers;
+            this.processStates = ProcessStates;
             // Populate the dictionary of LServer connections
             foreach (KeyValuePair<string, string> lserver in this.LServers)
             {
@@ -53,6 +59,31 @@ namespace TServer.Services
          *  After receiving permission it will submit the transaction, report to the other Tmanagers,
          *  store the DadInt value and release the lease
          */
+
+        // Execute at the beginning of each epoch
+        public void slotBeginning(int epoch)
+        {
+            // Get the suspected lServers from the processStates and add them to the list
+            if (processStates[epoch - 1] != null)
+            {
+                foreach (KeyValuePair<string, ServerProcessState> server in this.processStates[epoch - 1])
+                {
+                    // Chech which entry is the current server
+                    if (server.Key == this.TManagerId && server.Value.Suspects.Item1)
+                    {
+                        // Add the suspected servers to the list by their last character
+                        foreach (string suspect in server.Value.Suspects.Item2)
+                        {
+                            if (!this.tServersSuspected.Contains(Int32.Parse(suspect.Substring(suspect.Length - 1))))
+                            {
+                                this.tServersSuspected.Add(Int32.Parse(suspect.Substring(suspect.Length - 1)));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         public TxSubmitReply Transaction(TxSubmitRequest request)
         {
             // TODO - a way to not repeat this verification every time in every command for every client,

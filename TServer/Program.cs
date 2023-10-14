@@ -1,4 +1,5 @@
-﻿using Grpc.Core;
+﻿using Google.Protobuf.WellKnownTypes;
+using Grpc.Core;
 using Grpc.Net.Client;
 using Protos;
 using System.Text.RegularExpressions;
@@ -8,6 +9,19 @@ using Utilities;
 // Transaction Server
 class Program
 {
+    // Current epoch (has to be global variable)
+    private static int epoch = 0;
+
+    // Function to execute at the start of each epoch
+    // Each epoch executes each DELTA miliseconds
+    static void NextEpoch(object state)
+    {
+        epoch++;
+        Console.WriteLine("Advanced to epoch number " + epoch.ToString());
+        TServerService tServerService = (TServerService)state;
+        tServerService.slotBeginning(epoch);
+    }
+
     public static void Main(string[] args)
     {
         // Sleep until the specified time on args[3]
@@ -39,8 +53,14 @@ class Program
             lServers.Add(lServer.Id, lServer.Url);
         }
 
+        // Get the process states from the configuration file
+        Dictionary<string, ServerProcessState>[] processStates = config.ProcessStates;
+
+        // Get the slot duration
+        int duration = config.Slot.Item2;
+
         // All the functions of the TServer will be done here
-        TServerService tServerService = new TServerService(processId, tServers, lServers);
+        TServerService tServerService = new TServerService(processId, tServers, lServers, processStates);
 
         // All of the function call async related to clients, tservers and lservers
         TServerService_Client clientService = new TServerService_Client(tServerService);
@@ -58,8 +78,14 @@ class Program
 
         // Configuring HTTP for client connections in Register method
         AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
-        
+
+        // Timer related activities
+        TimerCallback timerCallback = NextEpoch;
+        Timer timer = new Timer(timerCallback, tServerService, duration, duration);
+        Console.WriteLine("Timer started at " + DateTime.Now);
+
         Console.WriteLine("Server is running on port: " + port + " and is ready to accept requests...");
+
         while (true) ;
     }
 }

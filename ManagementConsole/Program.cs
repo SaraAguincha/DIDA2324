@@ -129,7 +129,7 @@ namespace ManagementConsole
             }
             Console.WriteLine("Build successful.");
 
-            // Get the current time and add 5 secs to it
+            // Get the current time and add 10 secs to it
             DateTime currentTime = DateTime.Now;
             DateTime startTime = currentTime.AddSeconds(10);
             Console.WriteLine("Current time: " + currentTime.ToString("HH:mm:ss") + "\n" +
@@ -176,7 +176,7 @@ namespace ManagementConsole
                     // Restart all processes
                     case 'p':
                         currentTime = DateTime.Now;
-                        startTime = currentTime.AddSeconds(5);
+                        startTime = currentTime.AddSeconds(10);
 
                         foreach (string line in File.ReadAllLines(configFile))
                         {

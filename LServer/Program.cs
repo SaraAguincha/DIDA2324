@@ -62,13 +62,15 @@ class Program
             lServerIds.Add(config.LServers.FindIndex(x => x.Id == lServerId) + 1);
         }
 
-        // Get the slot duration and start time
-        TimeSpan start = config.Slot.Item1;
+        // Get the process states from the configuration file
+        Dictionary<string, ServerProcessState>[] processStates = config.ProcessStates;
+
+        // Get the slot duration
         int duration = config.Slot.Item2;
 
         // All the functions of the LServer will be done here
         lServers.Remove(processId);
-        LServerService lServerService = new LServerService(processId, serverId, lServers, tServers, lServerIds);
+        LServerService lServerService = new LServerService(processId, serverId, lServers, tServers, lServerIds, processStates);
 
         // All of the function call async related to clients, tservers and lservers
         LServerService_TServer tServerService = new LServerService_TServer(lServerService);
@@ -96,7 +98,7 @@ class Program
         Timer timer = new Timer(timerCallback, lServerService, duration, duration);
         Console.WriteLine("Timer started at " + DateTime.Now);
 
-        Console.WriteLine("Server is running in the port: " + port + " and is ready to accept requests...");
+        Console.WriteLine("Server is running on port: " + port + " and is ready to accept requests...");
 
         while (true);
     }

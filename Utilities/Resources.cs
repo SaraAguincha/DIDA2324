@@ -183,7 +183,7 @@ namespace Utilities
             // Fill out the remaining slots with the last slot
             for (int i = 0; i < processStates.Length; i++)
             {
-                if (processStates[i] == null)
+                if (processStates[i] == null && i > 0)
                 {
                     processStates[i] = processStates[i - 1];
                 }
