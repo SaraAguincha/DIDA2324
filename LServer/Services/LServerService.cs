@@ -2,6 +2,7 @@ using Grpc.Core;
 using Grpc.Net.Client;
 using Protos;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -36,7 +37,8 @@ namespace LServer.Services
         bool isLeaderDead = false;
 
         Queue<AskLeaseRequest> leaseRequestQueue = new Queue<AskLeaseRequest>();
-        Queue<Lease> leaseQueue = new Queue<Lease>();
+        List<Lease> leaseQueue = new List<Lease>();
+        List<Lease> broadcastLeaseQueue = new List<Lease>();  // this is the value in paxos algorithm
 
         public LServerService(string lManagerID, int serverId, Dictionary<string, string> lServers, 
             Dictionary<string, string> tServers, List<int> LServersId, Dictionary<string, ServerProcessState>[] ProcessStates) 
@@ -84,7 +86,6 @@ namespace LServer.Services
         public AskLeaseReply ProcessLeaseRequest(AskLeaseRequest request)
         {
             // Adds lease request to the queue (will be used in paxos)
-            // TODO - dont create leases identical to existing ones...
 
             foreach (string key in request.Key)
             {
@@ -93,9 +94,14 @@ namespace LServer.Services
                     TManagerId = request.TManagerId,
                     Key = { key }
                 };
-                // adds the lease request to the Queue
-                leaseQueue.Enqueue(lease);
+                // adds the lease request to the Queue if not there
+                lock (leaseQueue)
+                {
+                    if (!leaseQueue.Contains(lease))
+                        leaseQueue.Add(lease);
+                }
             }
+            Console.WriteLine("New LeaseRequest: " + request.Key + request.TManagerId);
 
             // Replies with an ack 
             AskLeaseReply leaseReply = new AskLeaseReply { Ack = true };
@@ -111,16 +117,14 @@ namespace LServer.Services
          */
         public bool BroadcastLeases()
         {
+            Console.WriteLine("Broadcasting Leases!");
             // Should have a lock when doing this
             // Prepares the request
             SendLeasesRequest leaseRequest = new SendLeasesRequest
             { 
                 Epoch = this.epoch,
-                Leases = { leaseQueue.ToArray() }
+                Leases = { broadcastLeaseQueue }
             };
-
-            // TODO - WARNING - The operations between sending and reseting the queue must be atomic
-            leaseQueue = new Queue<Lease>();
 
             List<Task<SendLeasesReply>> leaseReplies = new List<Task<SendLeasesReply>>();
 
@@ -136,7 +140,16 @@ namespace LServer.Services
             // wait for the responses
             Task.WaitAll(leaseReplies.ToArray(), 500);
 
+            // takes of the queue the first n elements that were broadcast
+            lock (leaseQueue)
+            {       
+                leaseQueue.RemoveAll(lease => broadcastLeaseQueue.Contains(lease));
+                broadcastLeaseQueue.Clear(); 
+            }
+            //Enumerable.Range(0, broadcastLeaseQueue.Count).Select(i => leaseQueue.Dequeue()).ToList();
+
             // TODO - for now it returns the first response received
+            // verify if received, else the values will be lost
             return leaseReplies.First().Result.Ack;
         }
 
@@ -164,13 +177,8 @@ namespace LServer.Services
                 this.highestRoundId = request.RoundId;
                 this.leaderId = request.ProposerId;
 
-                reply = new PromiseReply { Epoch = request.Epoch, RoundId = request.RoundId };
-                foreach (var leaseRequest in leaseRequestQueue)
-                {
-                    Lease paxosLease = new Lease { TManagerId = leaseRequest.TManagerId };
-                    foreach (var key in leaseRequest.Key){ paxosLease.Key.Add(key); }
-                    reply.Queue.Add(paxosLease);
-                }
+                // sends its leaseQueue in case some is missing from the leader
+                reply = new PromiseReply { Epoch = request.Epoch, RoundId = request.RoundId, Queue = { leaseQueue } };
             }
             else
                 Console.WriteLine("Oops, roundID too low in prepare phase.");
@@ -191,8 +199,16 @@ namespace LServer.Services
 
             if (request.RoundId >= this.highestRoundId)
             {
-                reply = new AcceptedReply { Epoch = request.Epoch, RoundId = request.RoundId, ServerId = this.serverId };
-                foreach (var lease in request.Queue) { reply.Queue.Add(lease); }
+                // update broadcast value
+                broadcastLeaseQueue.Clear();
+                broadcastLeaseQueue = request.Queue.ToList();
+
+                reply = new AcceptedReply { Epoch = request.Epoch, RoundId = request.RoundId, ServerId = this.serverId, Queue = { broadcastLeaseQueue } };
+
+                lock (leaseQueue)
+                {
+                    leaseQueue.RemoveAll(lease => broadcastLeaseQueue.Contains(lease));
+                }
             }
             else
                 Console.WriteLine("Oops, roundID too low in accept phase.");
@@ -225,6 +241,9 @@ namespace LServer.Services
             // Update the epoch
             this.epoch = epoch;
 
+            Console.WriteLine("Leases in broadCast: " + broadcastLeaseQueue.Count);
+
+
             // Get the suspected lServers from the processStates and add them to the list
             if (processStates[epoch - 1] != null)
             {
@@ -253,13 +272,12 @@ namespace LServer.Services
             // leaderId will always be the server with lower id, and not suspected
 
             // if the leader has not been defined or is suspected, calculates the new leader
-            // TODO - in case this.leaderId + 1, does not exist, it starts again from the beginning
             if (this.leaderId == 0 || this.lServersSuspected.Contains(this.leaderId))
             {
                 foreach (int sId in this.lServersId)
                 {
-                    // do the mod (?), after some point, we should 
-                    if (sId > this.leaderId && !this.lServersSuspected.Contains(sId))
+                    // makes it possible to loop through the Lservers
+                    if (sId > (this.leaderId % this.lServersId.Count) && !this.lServersSuspected.Contains(sId))
                     {
                         currentLeaderId = sId;
                         break;
@@ -271,7 +289,6 @@ namespace LServer.Services
                 currentLeaderId = this.leaderId;
 
             Console.WriteLine("IM SERVER: " + this.serverId);
-            // LEADER AND ACCEPTORS BEHAVIORS
 
             // if the currentLeaderId is this server, waits for promiseReplies from the majority of lservers
             if (this.serverId == currentLeaderId)
@@ -279,7 +296,8 @@ namespace LServer.Services
                 // TODO - maybe run BroadcastLeases asynchronously (we might want to know the result of the function, though)
                 bool succeededPrepare = ConsensusLeader(currentLeaderId, epoch);
                 // TODO - if it doesn't succeed, backoff time and repeats. Stops when a promise reply sends a Nack, with the current leader being different
-                BroadcastLeases();
+                if (succeededPrepare)
+                    BroadcastLeases();
             }
 
             // awaits for the leader to make a prepareRequest, and sends a promiseReply
@@ -289,19 +307,21 @@ namespace LServer.Services
                 
                 // Waits for some prepare/accept
                 // if doesn't receive any from the leader in the beginning of the epoch
-                Thread.Sleep(1000);
+                Thread.Sleep(1500);
                 // if leader is dead, add to the suspected list
                 if (this.isLeaderDead)
                 {
+                    Console.WriteLine("Server Leader is possible dead :(");
                     if (!this.lServersSuspected.Contains(this.leaderId))
                     {
                         this.lServersSuspected.Add(this.leaderId);
                     }
+                    this.leaderId = currentLeaderId;
                 }
                 else
                     Console.WriteLine("Everything is fine, Leader is alive and responsive!");
-                this.leaderId = currentLeaderId;
             }
+            Console.WriteLine("End of Consensus Epoch");
         }
 
         public bool ConsensusLeader(int currentLeaderId, int epoch) 
@@ -312,20 +332,10 @@ namespace LServer.Services
             {
                 int currentRoundId = this.highestRoundId + 1;
 
-                //List<Task<PromiseReply>> promiseReplies = new List<Task<PromiseReply>>();
-
                 List<PromiseReply> promiseReplies = new List<PromiseReply>();
                 List<Task> pTasks = new List<Task>();
 
                 PrepareRequest prepareRequest = new PrepareRequest { Epoch = epoch, ProposerId = this.serverId, RoundId = currentRoundId };
-
-                /*  NOT WORKING
-                foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
-                {
-                    // for each entry in LServers, run a task with the request for a promise
-                    AsyncUnaryCall<PromiseReply> promiseReply = lServerInstances.Value.PrepareAsync(prepareRequest);
-                    promiseReplies.Add(promiseReply.ResponseAsync);
-                }*/
 
                 foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
                 {
@@ -346,36 +356,47 @@ namespace LServer.Services
                 }
 
                 // waits some time for responses
-                Task.WaitAll(pTasks.ToArray(), 500);
+                Task.WaitAll(pTasks.ToArray(), 800);
 
                 // If the promise replies are not the majority, the prepare phase has failed
-                // TODO - verify how the Quorum should be selected. Should not count with suspected servers p.e
                 if (promiseReplies.Count < (this.lServersId.Count - this.lServersSuspected.Count) / 2)
                 {
                     return false;
                 }
                 this.highestRoundId = currentRoundId;
                 Console.WriteLine("I am the leader: " + serverId + ", and ran the prepare phase.");
+                
+                // call a function to verify and update the Queue of leases in case of missing leases
+                /*foreach (PromiseReply promiseReply in promiseReplies)
+                {
+                    CompareLeaseQueue(promiseReply.Queue.ToList());
+                    Console.WriteLine("Comparing . . .");
+                }*/
             }
 
             // Accept Phase (Step 2)
 
-            //List<Task<AcceptedReply>> acceptedReplies = new List<Task<AcceptedReply>>();
             List<AcceptedReply> acceptedReplies = new List<AcceptedReply>();
             List<Task> aTasks = new List<Task>();
 
-            AcceptRequest acceptRequest = new AcceptRequest { Epoch = epoch, RoundId = this.highestRoundId };
-
-            if (leaseQueue.Count > 0)
+            // update the list of leases to broadcast and send as the new value to the acceptors
+            // it may receive requests in this small fraction of time, locks the value that will be sent
+            lock (leaseQueue)
             {
-                foreach (var lease in leaseQueue) { acceptRequest.Queue.Add(lease); }
+                lock (broadcastLeaseQueue)
+                {
+                    if (broadcastLeaseQueue.Count == 0)
+                        broadcastLeaseQueue = leaseQueue;
+                    else
+                        foreach(var lease in leaseQueue)
+                        {
+                            if (!broadcastLeaseQueue.Contains(lease))
+                                broadcastLeaseQueue.Add(lease);
+                        }
+                }
             }
-            /*  NOT WORKING
-            foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
-            {
-                AsyncUnaryCall<AcceptedReply> acceptedReply = lServerInstances.Value.AcceptAsync(acceptRequest);
-                acceptedReplies.Add(acceptedReply.ResponseAsync);
-            }*/
+
+            AcceptRequest acceptRequest = new AcceptRequest { Epoch = epoch, RoundId = this.highestRoundId , Queue = { broadcastLeaseQueue } };
 
             foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
             {
@@ -395,15 +416,15 @@ namespace LServer.Services
                 aTasks.Add(t);
             }
 
-            Task.WaitAll(aTasks.ToArray(), 500);
+            Task.WaitAll(aTasks.ToArray(), 1000);
 
             // If the accepted replies are not the majority, the accept phase has failed
-            // TODO - verify how the Quorum should be selected. Should not count with suspected servers p.e
             if (acceptedReplies.Count < (this.lServersId.Count - this.lServersSuspected.Count) / 2)
             {
+                Console.WriteLine("Leader Failed in accept replies...: " + acceptedReplies.Count);
                 return false;
             }
-            
+
             // TODO - maybe not do it here
             // Reviews the suspected servers
             foreach (AcceptedReply acceptedReply in acceptedReplies)
@@ -417,23 +438,25 @@ namespace LServer.Services
             Console.WriteLine("Here is the consensual queue: ");
             foreach (var lease in acceptRequest.Queue)
             {
-                //Console.Write(lease.TManagerId + lease.Key + "\n");
+                Console.Write(lease.TManagerId + lease.Key + "\n");
             }
-
+            
             this.leaderId = currentLeaderId;
             return true;
         }
 
-        public bool ConsensusAcceptor(int currentLeaderId)
+    
+        // not yet used, but eventually
+        public void CompareLeaseQueue(List<Lease> acceptorsQueue)
         {
-            // if doesn't receive any accept/prepare from the leader in the beginning of the epoch
-            // then it returns false
-            Thread.Sleep(500);
-            if (isLeaderDead)
+            foreach (Lease lease in acceptorsQueue)
             {
-                return false;
+                lock (leaseQueue)
+                {
+                    if (!leaseQueue.Contains(lease))
+                        leaseQueue.Add(lease);
+                }
             }
-            return true;
         }
     }
 }
