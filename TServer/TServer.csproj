@@ -17,6 +17,7 @@
     </PackageReference>
     <Protobuf Include="..\protos\ClientToTServer.proto" GrpcServices="Both" Link="protos\ClientToTServer.proto" />
     <Protobuf Include="..\protos\TServerToLServer.proto" GrpcServices="Both" Link="protos\TServerToLServer.proto" />
+	  <Protobuf Include="..\protos\TServerToTServer.proto" GrpcServices="Both" Link="protos\TServerToTServer.proto" />
 	<ProjectReference Include="..\Utilities\Utilities.csproj" />
   </ItemGroup>
 

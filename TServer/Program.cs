@@ -67,10 +67,13 @@ class Program
 
         TServerService_LServer lServerService = new TServerService_LServer(tServerService);
 
+        TServerService_TServer tServerSelfService = new TServerService_TServer(tServerService);
+
         Server server = new Server
         {
             Services = { ClientTServerService.BindService(clientService),
-                         TServerLServerService.BindService(lServerService)},
+                         TServerLServerService.BindService(lServerService),
+                         TServerTServerService.BindService(tServerSelfService) },
             Ports = { serverPort }
         };
 

@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package protos;
+
+service TServerTServerService {
+	rpc ReleaseLease (ReleaseLeaseRequest) returns (ReleaseLeaseReply);
+}
+
+/* Request for a lease release by the TServer
+	- TManager ID
+	- All the keys for the DadInts intended to release
+*/
+message ReleaseLeaseRequest {
+	string tManagerId = 1;
+	string key = 2;
+}
+
+/* Reply for a lease release by the TServer
+	- Ack
+*/
+message ReleaseLeaseReply {
+	bool ack = 1;
+}

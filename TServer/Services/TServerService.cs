@@ -18,13 +18,14 @@ namespace TServer.Services
         // TODO - store the clients connected to the server
 
         // Perhaps dictionaries are not the most efficient, but might help with debugging (hopefully C:)
-        private Dictionary<string, TServerLServerService.TServerLServerServiceClient> clientInstances = new Dictionary<string, TServerLServerService.TServerLServerServiceClient>();
         private Dictionary<string, GrpcChannel> channels = new Dictionary<string, GrpcChannel>();
+        private Dictionary<string, TServerLServerService.TServerLServerServiceClient> lServerInstances = new Dictionary<string, TServerLServerService.TServerLServerServiceClient>();
+        private Dictionary<string, TServerTServerService.TServerTServerServiceClient> tServerInstances = new Dictionary<string, TServerTServerService.TServerTServerServiceClient>();
 
         // Server attributes
-        private string TManagerId;
-        private Dictionary<string, string> LServers;
-        private Dictionary<string, string> TServers;
+        private string tManagerId;
+        private Dictionary<string, string> lServers;
+        private Dictionary<string, string> tServers;
         private Dictionary<string, DadInt> dadInts = new Dictionary<string, DadInt> ();
         private List<int> tServersSuspected = new List<int>();
         
@@ -34,19 +35,28 @@ namespace TServer.Services
 
 
         // set all the server information from config
-        public TServerService(string TManagerId, Dictionary<string, string> TServers, Dictionary<string, string> LServers,
+        public TServerService(string tManagerId, Dictionary<string, string> tServers, Dictionary<string, string> lServers,
             Dictionary<string, ServerProcessState>[] ProcessStates)
         {
-            this.TManagerId = TManagerId;
-            this.TServers = TServers;
-            this.LServers = LServers;
+            this.tManagerId = tManagerId;
+            this.tServers = tServers;
+            this.lServers = lServers;
             this.processStates = ProcessStates;
             // Populate the dictionary of LServer connections
-            foreach (KeyValuePair<string, string> lserver in this.LServers)
+            foreach (KeyValuePair<string, string> lserver in this.lServers)
             {
                 GrpcChannel channel = GrpcChannel.ForAddress(lserver.Value);
                 channels.Add(lserver.Key, channel);
-                clientInstances.Add(lserver.Key, new TServerLServerService.TServerLServerServiceClient(channel));
+                lServerInstances.Add(lserver.Key, new TServerLServerService.TServerLServerServiceClient(channel));
+            }
+
+            // populate all of tservers connections
+            foreach (KeyValuePair<string, string> tserver in this.tServers)
+            {
+                //Console.WriteLine(tserver.Value);
+                GrpcChannel channel = GrpcChannel.ForAddress(tserver.Value);
+                channels.Add(tserver.Key, channel);
+                tServerInstances.Add(tserver.Key, new TServerTServerService.TServerTServerServiceClient(channel));
             }
         }
 
@@ -63,13 +73,20 @@ namespace TServer.Services
         // Execute at the beginning of each epoch
         public void slotBeginning(int epoch)
         {
+            //DEBUG
+            Console.WriteLine("Key Access Queue:");
+            foreach (var item in keyAccessQueue)
+            {
+                Console.Write("Key: {0} Queue Peek: {1} Queue Size: {2}\n", item.Key, item.Value.Peek(), item.Value.Count);
+            }
+
             // Get the suspected lServers from the processStates and add them to the list
             if (processStates[epoch - 1] != null)
             {
                 foreach (KeyValuePair<string, ServerProcessState> server in this.processStates[epoch - 1])
                 {
                     // Chech which entry is the current server
-                    if (server.Key == this.TManagerId && server.Value.Suspects.Item1)
+                    if (server.Key == this.tManagerId && server.Value.Suspects.Item1)
                     {
                         // Add the suspected servers to the list by their last character
                         foreach (string suspect in server.Value.Suspects.Item2)
@@ -114,7 +131,7 @@ namespace TServer.Services
                     leaseKeys.Add(dadInt.Key);
             }
 
-            AskLeaseRequest askLeaseRequest = new AskLeaseRequest { TManagerId = this.TManagerId, Key = { leaseKeys }};
+            AskLeaseRequest askLeaseRequest = new AskLeaseRequest { TManagerId = this.tManagerId, Key = { leaseKeys }};
 
             // TODO - should be async, currently not
             //AskLeaseReply leaseReply = RequestLease(leaseRequest);
@@ -122,10 +139,10 @@ namespace TServer.Services
             // requests a lease from all of the LServers
             List<Task<AskLeaseReply>> askLeaseReplies = new List<Task<AskLeaseReply>>();
             // for each LServer starts a task with a request
-            foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> clientInstance in this.clientInstances)
+            foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> lServerInstance in this.lServerInstances)
             {
                 // for each entry in LServers, makes a request for a lease
-                AsyncUnaryCall<AskLeaseReply> leaseReply = clientInstance.Value.AskLeaseAsync(askLeaseRequest);
+                AsyncUnaryCall<AskLeaseReply> leaseReply = lServerInstance.Value.AskLeaseAsync(askLeaseRequest);
                 askLeaseReplies.Add(leaseReply.ResponseAsync);
             }
             // TODO
@@ -147,8 +164,9 @@ namespace TServer.Services
                 if (keyAccessQueue.ContainsKey(leaseKeys[i]))
                 {
                     string firstInQueue = keyAccessQueue[leaseKeys[i]].Peek();
-                    if (firstInQueue == TManagerId)
+                    if (firstInQueue == tManagerId)
                         i++;
+                    Thread.Sleep(100);
                 }
             }
 
@@ -160,6 +178,8 @@ namespace TServer.Services
                     dadInts[dInt.Key] = dInt;
                 else
                     dadInts.Add(dInt.Key, new DadInt (dInt));
+                // TODO - this should only be done after all the databases between the TManagers are consistent
+                BroadcastRelease(dInt.Key);
             }
 
             // Transaction reply is only about the reads
@@ -169,6 +189,8 @@ namespace TServer.Services
             {
                 if (dadInts.ContainsKey(key))
                     dadIntsToReply.Add(dadInts[key]);
+                // TODO - this should only be done after all the databases between the TManagers are consistent
+                BroadcastRelease(key);
             }
 
             // responds with the DadInts the client wants to read
@@ -178,6 +200,43 @@ namespace TServer.Services
             // TODO before replying broadcast to the other TServers and update the DadInts values
 
             return reply;
+        }
+
+        private bool BroadcastRelease(string key) 
+        {
+            if (this.keyAccessQueue[key].Count > 1)
+            {
+                foreach (var tServer in this.tServerInstances)
+                {
+                    var releaseReply = tServer.Value.ReleaseLease(new ReleaseLeaseRequest { Key = key, TManagerId = this.tManagerId });
+                    if (!releaseReply.Ack)
+                    {
+                        Console.WriteLine("WARNING - Something really wrong happened with the Release Lease Reply of Key: {0} and ID: {1}", key, this.tManagerId);
+                        return false;
+                    }
+                }
+                if (this.keyAccessQueue[key].Peek() == this.tManagerId)
+                {
+                    this.keyAccessQueue[key].Dequeue();
+                    Console.WriteLine("Realesed Lease of Key: {0} and ID: {1}\n", key, this.tManagerId);
+                }
+            }
+            return true;
+        }
+
+        public ReleaseLeaseReply ReleaseLease(ReleaseLeaseRequest request)
+        {
+            try
+            {
+                if (this.keyAccessQueue[request.Key].Peek() == request.TManagerId)
+                {
+                    this.keyAccessQueue[request.Key].Dequeue();
+                    return new ReleaseLeaseReply { Ack = true };
+                }
+                else
+                    return new ReleaseLeaseReply { Ack = false };
+            }
+            catch { return new ReleaseLeaseReply { Ack = false }; };
         }
 
 
