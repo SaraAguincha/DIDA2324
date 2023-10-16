@@ -126,19 +126,32 @@ namespace LServer.Services
                 Leases = { broadcastLeaseQueue }
             };
 
-            List<Task<SendLeasesReply>> leaseReplies = new List<Task<SendLeasesReply>>();
+            List<SendLeasesReply> leaseReplies = new List<SendLeasesReply>();
+            List<Task> t = new List<Task>();
 
             Console.WriteLine("Lease request has :" + leaseRequest.Leases.Count + " leases.");
 
             // Sends the list to every TManager that has sent a request
-            foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> tServerInstances in this.tServerInstances)
+            foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> tServerInstance in this.tServerInstances)
             {
-                // for each entry in TServers, run a task with the current value in the Leases Queue
-                AsyncUnaryCall<SendLeasesReply> leaseReply = tServerInstances.Value.SendLeasesAsync(leaseRequest);
-                leaseReplies.Add(leaseReply.ResponseAsync);
+                Task task = Task.Run(() =>
+                {
+                    try
+                    {
+                        SendLeasesReply leaseReply = tServerInstance.Value.SendLeases(leaseRequest);
+                        leaseReplies.Add(leaseReply);
+                    }
+                    catch (RpcException ex)
+                    {
+                        //Console.WriteLine("Something whent wrong in a broadcast lease reply..." + ex.Status);
+                    }
+                    return Task.CompletedTask;
+                });
+                t.Add(task);
             }
-            // wait for the responses
-            Task.WaitAll(leaseReplies.ToArray(), 500);
+            
+            // waits some time for responses
+            Task.WaitAll(t.ToArray(), 1000);
 
             // takes of the queue the first n elements that were broadcast
             lock (leaseQueue)
@@ -150,7 +163,7 @@ namespace LServer.Services
 
             // TODO - for now it returns the first response received
             // verify if received, else the values will be lost
-            return leaseReplies.First().Result.Ack;
+            return leaseReplies.First().Ack;
         }
 
 
@@ -238,6 +251,15 @@ namespace LServer.Services
          */
         public void Consensus(int epoch)
         {
+            // Kill the process if it's crashed in the process state for this epoch
+            if (processStates[epoch - 1] != null)
+            {
+                if (processStates[epoch - 1][this.lManagerID].Crashed)
+                {
+                    Environment.Exit(0);
+                }
+            }
+
             // Update the epoch
             this.epoch = epoch;
 
@@ -307,7 +329,7 @@ namespace LServer.Services
                 
                 // Waits for some prepare/accept
                 // if doesn't receive any from the leader in the beginning of the epoch
-                Thread.Sleep(1500);
+                Thread.Sleep(2000);
                 // if leader is dead, add to the suspected list
                 if (this.isLeaderDead)
                 {
@@ -416,6 +438,7 @@ namespace LServer.Services
                 aTasks.Add(t);
             }
 
+            // waits some time for responses
             Task.WaitAll(aTasks.ToArray(), 1000);
 
             // If the accepted replies are not the majority, the accept phase has failed

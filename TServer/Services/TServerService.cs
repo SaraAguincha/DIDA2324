@@ -73,6 +73,15 @@ namespace TServer.Services
         // Execute at the beginning of each epoch
         public void slotBeginning(int epoch)
         {
+            // Kill the process if it's crashed in the process state for this epoch
+            if (processStates[epoch - 1] != null)
+            {
+                if (processStates[epoch - 1][this.tManagerId].Crashed)
+                {
+                    Environment.Exit(0);
+                }
+            }
+
             //DEBUG
             Console.WriteLine("Key Access Queue:");
             foreach (var item in keyAccessQueue)
