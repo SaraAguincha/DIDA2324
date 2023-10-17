@@ -34,7 +34,9 @@ namespace LServer.Services
         // Paxos related atributes
         int epoch = 0;
         int highestRoundId = 0;
+        bool isLeader = false;
         bool isLeaderDead = false;
+        int backoffTime = 100;
 
         Queue<AskLeaseRequest> leaseRequestQueue = new Queue<AskLeaseRequest>();
         List<Lease> leaseQueue = new List<Lease>();
@@ -181,6 +183,13 @@ namespace LServer.Services
             Console.WriteLine("Entered Paxos Prepare! (Step 1)");
             
             PromiseReply reply = new PromiseReply { Epoch = -1};
+            
+            // In case a leader receives a prepare request, compare the serverId and roundId, and if the serverId is higher,
+            // accept the new leader and abort the prepare phase
+            if (this.isLeader && request.ProposerId < this.serverId)
+            {
+                return reply;
+            }
 
             // TODO - Consider the fact that a proposer can fail after accept,
             // i.e fill the "previousRoundId" and "queue" fields of the promiseReply.
@@ -263,7 +272,7 @@ namespace LServer.Services
             // Update the epoch
             this.epoch = epoch;
 
-            Console.WriteLine("Leases in broadCast: " + broadcastLeaseQueue.Count);
+            Console.WriteLine("Leases in broadcast: " + broadcastLeaseQueue.Count);
 
 
             // Get the suspected lServers from the processStates and add them to the list
@@ -316,10 +325,30 @@ namespace LServer.Services
             if (this.serverId == currentLeaderId)
             {
                 // TODO - maybe run BroadcastLeases asynchronously (we might want to know the result of the function, though)
-                bool succeededPrepare = ConsensusLeader(currentLeaderId, epoch);
+                int succeededPrepare = ConsensusLeader(currentLeaderId, epoch);
                 // TODO - if it doesn't succeed, backoff time and repeats. Stops when a promise reply sends a Nack, with the current leader being different
-                if (succeededPrepare)
-                    BroadcastLeases();
+                switch (succeededPrepare)
+                {
+                    // Everything went fine and can broadcast the leases
+                    case 1:
+                        this.backoffTime = 100;
+                        BroadcastLeases();
+                        break;
+
+                    // Didn't succeed in the prepare phase due to not enough promise/accept replies, backoff time and repeats
+                    case 0:
+                        Console.WriteLine("Didn't succeed in the prepare/accept phase due to not enough promise/accept replies.");
+                        Thread.Sleep(this.backoffTime + (this.serverId * 10));
+                        this.backoffTime *= 2;
+                        Consensus(epoch);
+                        break;
+
+                    // Another server is leader, aborted the prepare phase
+                    case -1:
+                        Console.WriteLine("Another server wants to be leader, aborted the prepare phase.");
+                        this.backoffTime = 100;
+                        break;
+                }
             }
 
             // awaits for the leader to make a prepareRequest, and sends a promiseReply
@@ -329,11 +358,11 @@ namespace LServer.Services
                 
                 // Waits for some prepare/accept
                 // if doesn't receive any from the leader in the beginning of the epoch
-                Thread.Sleep(2000);
+                Thread.Sleep(5000);
                 // if leader is dead, add to the suspected list
                 if (this.isLeaderDead)
                 {
-                    Console.WriteLine("Server Leader is possible dead :(");
+                    Console.WriteLine("Server Leader is possibly dead :(");
                     if (!this.lServersSuspected.Contains(this.leaderId))
                     {
                         this.lServersSuspected.Add(this.leaderId);
@@ -342,12 +371,16 @@ namespace LServer.Services
                 }
                 else
                     Console.WriteLine("Everything is fine, Leader is alive and responsive!");
+
+                this.backoffTime = 100;
             }
             Console.WriteLine("End of Consensus Epoch");
         }
 
-        public bool ConsensusLeader(int currentLeaderId, int epoch) 
+        public int ConsensusLeader(int currentLeaderId, int epoch) 
         {
+            this.isLeader = true;
+
             // Prepare Phase (Step 1)
             // only enters prepare phase in case it's a new leader!
             if (currentLeaderId != this.leaderId)
@@ -378,13 +411,26 @@ namespace LServer.Services
                 }
 
                 // waits some time for responses
-                Task.WaitAll(pTasks.ToArray(), 800);
+                Task.WaitAll(pTasks.ToArray(), 1500);
 
                 // If the promise replies are not the majority, the prepare phase has failed
                 if (promiseReplies.Count < (this.lServersId.Count - this.lServersSuspected.Count) / 2)
                 {
-                    return false;
+                    Console.WriteLine("Leader Failed in promise replies...: " + promiseReplies.Count);
+                    this.isLeader = false;
+                    return 0;
                 }
+
+                // If it receives a reply with an epoch = -1, it means that the leader has changed
+                foreach (PromiseReply promiseReply in promiseReplies)
+                {
+                    if (promiseReply.Epoch == -1)
+                    {
+                        this.isLeader = false;
+                        return -1;
+                    }
+                }
+
                 this.highestRoundId = currentRoundId;
                 Console.WriteLine("I am the leader: " + serverId + ", and ran the prepare phase.");
                 
@@ -439,13 +485,14 @@ namespace LServer.Services
             }
 
             // waits some time for responses
-            Task.WaitAll(aTasks.ToArray(), 1000);
+            Task.WaitAll(aTasks.ToArray(), 1500);
 
             // If the accepted replies are not the majority, the accept phase has failed
             if (acceptedReplies.Count < (this.lServersId.Count - this.lServersSuspected.Count) / 2)
             {
                 Console.WriteLine("Leader Failed in accept replies...: " + acceptedReplies.Count);
-                return false;
+                this.isLeader = false;
+                return 0;
             }
 
             // TODO - maybe not do it here
@@ -465,7 +512,8 @@ namespace LServer.Services
             }
             
             this.leaderId = currentLeaderId;
-            return true;
+            this.isLeader = false;
+            return 1;
         }
 
     
