@@ -358,7 +358,7 @@ namespace LServer.Services
                 
                 // Waits for some prepare/accept
                 // if doesn't receive any from the leader in the beginning of the epoch
-                Thread.Sleep(5000);
+                Thread.Sleep(4000);
                 // if leader is dead, add to the suspected list
                 if (this.isLeaderDead)
                 {
@@ -485,7 +485,7 @@ namespace LServer.Services
             }
 
             // waits some time for responses
-            Task.WaitAll(aTasks.ToArray(), 1500);
+            Task.WaitAll(aTasks.ToArray(), 1000);
 
             // If the accepted replies are not the majority, the accept phase has failed
             if (acceptedReplies.Count < (this.lServersId.Count - this.lServersSuspected.Count) / 2)
