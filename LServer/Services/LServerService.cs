@@ -26,8 +26,8 @@ namespace LServer.Services
         private Dictionary<string, GrpcChannel> channels = new Dictionary<string, GrpcChannel>();
         private Dictionary<string, PaxosService.PaxosServiceClient> lServerInstances = new Dictionary<string, PaxosService.PaxosServiceClient>();
         private Dictionary<string, TServerLServerService.TServerLServerServiceClient> tServerInstances = new Dictionary<string, TServerLServerService.TServerLServerServiceClient>();
-        private Dictionary<string, string> LServers;
-        private Dictionary<string, string> TServers;
+        private Dictionary<string, string> lServers;
+        private Dictionary<string, string> tServers;
 
         private Dictionary<string, ServerProcessState>[] processStates;
 
@@ -43,33 +43,33 @@ namespace LServer.Services
         List<Lease> broadcastLeaseQueue = new List<Lease>();  // this is the value in paxos algorithm
 
         public LServerService(string lManagerID, int serverId, Dictionary<string, string> lServers, 
-            Dictionary<string, string> tServers, List<int> LServersId, Dictionary<string, ServerProcessState>[] ProcessStates) 
+            Dictionary<string, string> tServers, List<int> lServersId, Dictionary<string, ServerProcessState>[] ProcessStates) 
         {
             this.lManagerID = lManagerID;
-            this.LServers = lServers;
-            this.TServers = tServers;
+            this.lServers = lServers;
+            this.tServers = tServers;
             this.serverId = serverId;
-            this.lServersId = LServersId;
+            this.lServersId = lServersId;
             this.processStates = ProcessStates;
             this.leaderId = 0;          // LeaderId is always > 0 ((for now))
            
             
             // populate all of lservers connections
-            foreach (KeyValuePair<string, string> lserver in this.LServers)
+            foreach (KeyValuePair<string, string> lServer in this.lServers)
             {
                 //Console.WriteLine(lserver.Value);
-                GrpcChannel channel = GrpcChannel.ForAddress(lserver.Value);
-                channels.Add(lserver.Key, channel);
-                lServerInstances.Add(lserver.Key, new PaxosService.PaxosServiceClient(channel));
+                GrpcChannel channel = GrpcChannel.ForAddress(lServer.Value);
+                channels.Add(lServer.Key, channel);
+                lServerInstances.Add(lServer.Key, new PaxosService.PaxosServiceClient(channel));
             }
 
             // populate all of tservers connections
-            foreach (KeyValuePair<string, string> tserver in this.TServers)
+            foreach (KeyValuePair<string, string> tServer in this.tServers)
             {
                 //Console.WriteLine(tserver.Value);
-                GrpcChannel channel = GrpcChannel.ForAddress(tserver.Value);
-                channels.Add(tserver.Key, channel);
-                tServerInstances.Add(tserver.Key, new TServerLServerService.TServerLServerServiceClient(channel));
+                GrpcChannel channel = GrpcChannel.ForAddress(tServer.Value);
+                channels.Add(tServer.Key, channel);
+                tServerInstances.Add(tServer.Key, new TServerLServerService.TServerLServerServiceClient(channel));
             }
         }
 
@@ -129,7 +129,7 @@ namespace LServer.Services
             };
 
             List<SendLeasesReply> leaseReplies = new List<SendLeasesReply>();
-            List<Task> t = new List<Task>();
+            List<Task> taskList = new List<Task>();
 
             Console.WriteLine("Lease request has :" + leaseRequest.Leases.Count + " leases.");
 
@@ -149,11 +149,11 @@ namespace LServer.Services
                     }
                     return Task.CompletedTask;
                 });
-                t.Add(task);
+                taskList.Add(task);
             }
             
             // waits some time for responses
-            Task.WaitAll(t.ToArray(), 1000);
+            Task.WaitAll(taskList.ToArray(), 1000);
 
             // takes of the queue the first n elements that were broadcast
             lock (leaseQueue)

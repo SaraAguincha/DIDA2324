@@ -34,7 +34,7 @@ namespace TServer.Services
 
         private Dictionary<string, ServerProcessState>[] processStates;
 
-        private List<string> globalLeaseKeys = new List<string> ();
+        private List<string> activeLeaseKeys = new List<string> ();
 
 
         // set all the server information from config
@@ -124,31 +124,30 @@ namespace TServer.Services
                 this.client = new ClientTServerService.ClientTServerServiceClient(channel);
             }*/
 
-            // prepares the request for the Lease Manager
+            // Prepares the request for the Lease Manager
             RepeatedField<string> reads = request.Key;
             RepeatedField<DadInt> writes = request.DadInts;
 
-            // makes a list of all the keys needed in the lease
+            // leaseKeys - a list of all the keys needed in the lease (non-repeating)
+            // activeLeaseKeys - a list of all the keys that haven't been read/written
+            // (repeats if one transaction uses the same key more than once)
             List<string> leaseKeys = new List<string>();
 
             foreach (string key in reads)
             {
                 if(!leaseKeys.Contains(key))
                     leaseKeys.Add(key);
-                globalLeaseKeys.Add(key);
+                activeLeaseKeys.Add(key);
             }
 
             foreach (DadInt dadInt in writes)
             {
                 if (!leaseKeys.Contains(dadInt.Key))
                     leaseKeys.Add(dadInt.Key);
-                globalLeaseKeys.Add(dadInt.Key);
+                activeLeaseKeys.Add(dadInt.Key);
             }
 
             AskLeaseRequest askLeaseRequest = new AskLeaseRequest { TManagerId = this.tManagerId, Key = { leaseKeys }};
-
-            // TODO - should be async, currently not
-            //AskLeaseReply leaseReply = RequestLease(leaseRequest);
 
             // requests a lease from all of the LServers
             List<Task<AskLeaseReply>> askLeaseReplies = new List<Task<AskLeaseReply>>();
@@ -216,9 +215,9 @@ namespace TServer.Services
                         // One of the keys was written/read, so we can increment i
                         i++;
                         readWriteOperation = true;
-                        globalLeaseKeys.Remove(leaseKey);
+                        activeLeaseKeys.Remove(leaseKey);
                         // If there is another instance of the key in another requests, don't release the lease just yet
-                        if (!globalLeaseKeys.Contains(leaseKey))
+                        if (!activeLeaseKeys.Contains(leaseKey))
                             BroadcastRelease(leaseKey);
                         continue;
                     }
