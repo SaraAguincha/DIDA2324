@@ -11,8 +11,11 @@ service TServerTServerService {
 	- All the keys for the DadInts intended to release
 */
 message ReleaseLeaseRequest {
-	string tManagerId = 1;
-	string key = 2;
+	string key = 1;
+	int32 value = 2;
+	repeated string keyQueue = 3;
+	int32 timestamp = 4;
+	bool written = 5;
 }
 
 /* Reply for a lease release by the TServer

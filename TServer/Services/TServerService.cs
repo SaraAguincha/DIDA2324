@@ -1,4 +1,5 @@
 using Google.Protobuf.Collections;
+using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Protos;
@@ -29,6 +30,9 @@ namespace TServer.Services
         private Dictionary<string, string> tServers;
         private Dictionary<string, DadInt> dadInts = new Dictionary<string, DadInt> ();
         private List<int> tServersSuspected = new List<int>();
+
+        // Lamport timestamp (vector clock)
+        int queueTimestamp = 0;
         
         private Dictionary<string, Queue<string>> keyAccessQueue = new Dictionary<string, Queue<string>>();
 
@@ -85,12 +89,18 @@ namespace TServer.Services
                 }
             }
 
-            //DEBUG
+            // DEBUG
             Console.WriteLine("Key Access Queue:");
             foreach (var item in keyAccessQueue)
             {
                 Console.Write($"Key: {item.Key} Queue Peek: {item.Value.Peek()} Queue Size: {item.Value.Count}\n");
             }
+            /*Console.WriteLine("Dad Ints:");
+            foreach (var dadInt in this.dadInts)
+            {
+                Console.WriteLine($"Key: {dadInt.Key} Value: {dadInt.Value}\n");
+            }*/
+            // END OF DEBUG
 
             // Get the suspected lServers from the processStates and add them to the list
             if (processStates[epoch - 1] != null)
@@ -191,7 +201,9 @@ namespace TServer.Services
                         continue;
 
                     else
-                    {  
+                    {
+                        int value = 0;
+                        bool writtenValue = false;
                         // Write to the key if present in the client request
                         foreach (DadInt dInt in writes)
                         {
@@ -201,6 +213,9 @@ namespace TServer.Services
                                     dadInts[dInt.Key] = dInt;
                                 else
                                     dadInts.Add(dInt.Key, new DadInt(dInt));
+                                value = dInt.Val;
+                                writtenValue = true;
+                                break;
                             }
                         }
                         // Read the key if present in the client request
@@ -218,7 +233,7 @@ namespace TServer.Services
                         activeLeaseKeys.Remove(leaseKey);
                         // If there is another instance of the key in another requests, don't release the lease just yet
                         if (!activeLeaseKeys.Contains(leaseKey))
-                            BroadcastRelease(leaseKey);
+                            BroadcastRelease(leaseKey, value, writtenValue);
                         continue;
                     }
                 }
@@ -253,30 +268,59 @@ namespace TServer.Services
         }
 
         // Function that broadcasts the release and releases locally if necessary
-        private bool BroadcastRelease(string key) 
+        private bool BroadcastRelease(string key, int value, bool writtenValue) 
         {
             // Start of critical section
-            Monitor.Enter(this);
+            //Monitor.Enter(this);
             try
             {
-                if (this.keyAccessQueue[key].Peek() != this.tManagerId)
+                List<Task<ReleaseLeaseReply>> releaseReplyList = new List<Task<ReleaseLeaseReply>>();
+                Console.WriteLine("Before Lock (Broadcast)");
+                lock (this)
                 {
-                    Console.WriteLine($"WARNING - Queue peek is wrong for: {key} and ID: {this.tManagerId}");
-                    return false;
-                }
-                // Only release lease if any other TManager wants it
-                if (this.keyAccessQueue[key].Count > 1)
-                {
-                    foreach (var tServer in this.tServerInstances)
+                    this.queueTimestamp++;
+                    Console.WriteLine("After Lock (Broadcast)");
+                    if (this.keyAccessQueue[key].Peek() != this.tManagerId)
                     {
-                        // This call has to be async, if we wait for the response we might get soft locked
-                        // Disadvanted - We can't be sure that the call was successful
-                        var releaseReply = tServer.Value.ReleaseLeaseAsync(new ReleaseLeaseRequest { Key = key, TManagerId = this.tManagerId });
+                        Console.WriteLine($"WARNING - Queue peek is wrong for: {key} and ID: {this.tManagerId}");
+                        return false;
                     }
-                    this.keyAccessQueue[key].Dequeue();
-                    Console.WriteLine($"Realesed Lease of Key: {key} and ID: {this.tManagerId}");
+                    // Only release lease if any other TManager wants it
+                    if (this.keyAccessQueue[key].Count > 1)
+                    {
+                        foreach (var tServer in this.tServerInstances)
+                        {
+                            ReleaseLeaseRequest releaseLeaseRequest = new ReleaseLeaseRequest
+                            {
+                                Key = key,
+                                KeyQueue = { keyAccessQueue[key].ToList() },
+                                Timestamp = this.queueTimestamp,
+                                Written = writtenValue
+                            };
+                            if (writtenValue)
+                                releaseLeaseRequest.Value = value;
+
+                            // This call has to be async, if we wait for the response we might get soft locked
+                            var releaseReply = tServer.Value.ReleaseLeaseAsync(releaseLeaseRequest);
+                            releaseReplyList.Add(releaseReply.ResponseAsync);
+                        }
+                        this.keyAccessQueue[key].Dequeue();
+                        Console.WriteLine($"Realesed Lease of Key: {key} and ID: {this.tManagerId}");
+                    }
                 }
-                return true;
+                Task.WaitAll(releaseReplyList.ToArray(), 500);
+
+                int completedTask = 0;
+                foreach (var task in releaseReplyList)
+                {
+                    if (task.IsCompletedSuccessfully)
+                        completedTask++;
+                }
+                // TODO - HARDCODED - fix quorum
+                if (completedTask > 1)
+                    return true;
+                else
+                    return false;
             }
             catch (Exception e) 
             {
@@ -286,7 +330,7 @@ namespace TServer.Services
             finally 
             {
                 // End of critical section
-                Monitor.Exit(this); 
+                //Monitor.Exit(this); 
             }
         }
 
@@ -296,15 +340,25 @@ namespace TServer.Services
             Monitor.Enter(this);
             try
             {
-                if (this.keyAccessQueue[request.Key].Peek() == request.TManagerId)
+                if (request.Timestamp > this.queueTimestamp)
                 {
-                    this.keyAccessQueue[request.Key].Dequeue();
+                    this.queueTimestamp = request.Timestamp;
+                    this.keyAccessQueue[request.Key].Clear();
+                    // Not the most efficient but the safest
+                    foreach (var tManagerId in request.KeyQueue)
+                    {
+                        this.keyAccessQueue[request.Key].Enqueue(tManagerId);
+                        if (request.Written)
+                            this.dadInts[request.Key].Val = request.Value;
+                    }
                     // Notify that there has been a change to keyAccessQueu
                     Monitor.PulseAll(this);
                     return new ReleaseLeaseReply { Ack = true };
                 }
                 else
+                {
                     return new ReleaseLeaseReply { Ack = false };
+                }
             }
             catch
             {
