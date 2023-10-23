@@ -34,6 +34,7 @@ namespace TServer.Services
         // Lamport timestamp (vector clock)
         int queueTimestamp = 0;
         
+        private List<ReleaseLeaseRequest> releasesPending = new List<ReleaseLeaseRequest> ();
         private Dictionary<string, Queue<string>> keyAccessQueue = new Dictionary<string, Queue<string>>();
 
         private Dictionary<string, ServerProcessState>[] processStates;
@@ -182,7 +183,8 @@ namespace TServer.Services
             // Start of critical section
             Monitor.Enter(this);
 
-            int numberLeasesNeeded = leaseKeys.Count;
+            //int numberLeasesNeeded = leaseKeys.Count;
+            int numberLeasesNeeded = reads.Count + writes.Count;
 
             // List of dadInts to use as reply (read request by the client)
             List<DadInt> dadIntsToReply = new List<DadInt>();
@@ -215,7 +217,6 @@ namespace TServer.Services
                                     dadInts.Add(dInt.Key, new DadInt(dInt));
                                 value = dInt.Val;
                                 writtenValue = true;
-                                break;
                             }
                         }
                         // Read the key if present in the client request
@@ -233,7 +234,9 @@ namespace TServer.Services
                         activeLeaseKeys.Remove(leaseKey);
                         // If there is another instance of the key in another requests, don't release the lease just yet
                         if (!activeLeaseKeys.Contains(leaseKey))
+                        {
                             BroadcastRelease(leaseKey, value, writtenValue);
+                        }
                         continue;
                     }
                 }
@@ -278,7 +281,6 @@ namespace TServer.Services
                 Console.WriteLine("Before Lock (Broadcast)");
                 lock (this)
                 {
-                    this.queueTimestamp++;
                     Console.WriteLine("After Lock (Broadcast)");
                     if (this.keyAccessQueue[key].Peek() != this.tManagerId)
                     {
@@ -293,9 +295,8 @@ namespace TServer.Services
                             ReleaseLeaseRequest releaseLeaseRequest = new ReleaseLeaseRequest
                             {
                                 Key = key,
-                                KeyQueue = { keyAccessQueue[key].ToList() },
-                                Timestamp = this.queueTimestamp,
-                                Written = writtenValue
+                                Written = writtenValue,
+                                TManagerId = this.tManagerId
                             };
                             if (writtenValue)
                                 releaseLeaseRequest.Value = value;
@@ -340,23 +341,23 @@ namespace TServer.Services
             Monitor.Enter(this);
             try
             {
-                if (request.Timestamp > this.queueTimestamp)
+                foreach (var release in this.releasesPending)
                 {
-                    this.queueTimestamp = request.Timestamp;
-                    this.keyAccessQueue[request.Key].Clear();
-                    // Not the most efficient but the safest
-                    foreach (var tManagerId in request.KeyQueue)
+                    if (keyAccessQueue[release.Key].Peek() == release.TManagerId)
                     {
-                        this.keyAccessQueue[request.Key].Enqueue(tManagerId);
-                        if (request.Written)
-                            this.dadInts[request.Key].Val = request.Value;
+                        this.keyAccessQueue[release.Key].Dequeue();
+                        Monitor.PulseAll(this);
                     }
-                    // Notify that there has been a change to keyAccessQueu
+                }
+                if (keyAccessQueue[request.Key].Peek() == request.TManagerId)
+                {
+                    this.keyAccessQueue[request.Key].Dequeue();
                     Monitor.PulseAll(this);
                     return new ReleaseLeaseReply { Ack = true };
                 }
                 else
                 {
+                    this.releasesPending.Add(request);
                     return new ReleaseLeaseReply { Ack = false };
                 }
             }

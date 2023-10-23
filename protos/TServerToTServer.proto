@@ -13,9 +13,8 @@ service TServerTServerService {
 message ReleaseLeaseRequest {
 	string key = 1;
 	int32 value = 2;
-	repeated string keyQueue = 3;
-	int32 timestamp = 4;
-	bool written = 5;
+	bool written = 3;
+	string tManagerId = 4;
 }
 
 /* Reply for a lease release by the TServer
