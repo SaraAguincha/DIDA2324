@@ -4,6 +4,7 @@ package protos;
 
 service TServerTServerService {
 	rpc ReleaseLease (ReleaseLeaseRequest) returns (ReleaseLeaseReply);
+	rpc AskRelease (AskReleaseRequest) returns (AskReleaseReply);
 }
 
 /* Request for a lease release by the TServer
@@ -21,5 +22,15 @@ message ReleaseLeaseRequest {
 	- Ack
 */
 message ReleaseLeaseReply {
+	bool ack = 1;
+}
+
+message AskReleaseRequest {
+	string key = 1;
+	string from = 2;
+	string to = 3;
+}
+
+message AskReleaseReply {
 	bool ack = 1;
 }
