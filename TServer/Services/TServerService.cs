@@ -100,7 +100,7 @@ namespace TServer.Services
             /*Console.WriteLine("Dad Ints:");
             foreach (var dadInt in this.dadInts)
             {
-                Console.WriteLine($"Key: {dadInt.Key} Value: {dadInt.Value}\n");
+                Console.WriteLine($"Key: {dadInt.Value.Key} Value: {dadInt.Value.Val}\n");
             }*/
             // END OF DEBUG
 
@@ -144,21 +144,13 @@ namespace TServer.Services
 
         public TxSubmitReply Transaction(TxSubmitRequest request)
         {
-            // TODO - a way to not repeat this verification every time in every command for every client,
-            // right now it only works for one client.. Choose one way to store the clients/channels
-            /* is this necessary ??
-            if (client == null)
-            {
-                this.channel = GrpcChannel.ForAddress("http://localhost:10000");
-                this.client = new ClientTServerService.ClientTServerServiceClient(channel);
-            }*/
-
             // Prepares the request for the Lease Manager
             RepeatedField<string> reads = request.Key;
             RepeatedField<DadInt> writes = request.DadInts;
 
             // leaseKeys - a list of all the keys needed in the lease (non-repeating)
-            // activeLeaseKeys - a list of all the keys that haven't been read/written in all active transactions
+            // activeLeaseKeys - a list of all the keys that haven't been read/written in all active transactions for this TManager
+            // concludedKeys - leaseKeys that have been concluded and their corresponding lease has been released
             // (repeats if one transaction uses the same key more than once)
             List<string> leaseKeys = new List<string>();
             List<string> concludedKeys = new List<string>();
@@ -195,11 +187,7 @@ namespace TServer.Services
 
             // for now it returns the first response
             AskLeaseReply askLeaseReply = askLeaseReplies.First().Result;
-            //Console.WriteLine("server response to askLease: " + askLeaseReply.Ack);
 
-            // TODO - add a way to forcefully break and get a lease (in case a TM crashes while having it)
-
-            //int numberLeasesNeeded = leaseKeys.Count;
             int numberLeasesNeeded = reads.Count + writes.Count;
 
             // List of dadInts to use as reply (read request by the client)
@@ -272,20 +260,21 @@ namespace TServer.Services
                         }
                         Monitor.Wait(this);
 
-                        // If time is exceded, the TManager that was holding the lease might have crashed
+                        // After having received a pulse, the TManager that's holding the lease for some key might have crashed
                         foreach (var leaseKey in leaseKeys)
                         {
-                            // If the key was already concluded there is nothing else to do
-                            // If we are not next in the queue there is also no need to worry
+                            
                             if (!keyAccessChange.ContainsKey(leaseKey))
                             {
-                                //Console.WriteLine($"\nContinue 1 for key: {leaseKey}\n");
+                                Console.WriteLine($"Continue 1 for key: {leaseKey}");
                                 continue;
                             }
 
-                            if (concludedKeys.Contains(leaseKey) || keyAccessChange[leaseKey] <= 2)
+                            // If the key was already concluded, move on to the next one
+                            // If the change of lease happened less than 2 epochs ago, continue to the next key
+                            if (concludedKeys.Contains(leaseKey) || keyAccessChange[leaseKey] < 2)
                             {
-                                //Console.WriteLine($"\nContinue 2 for key: {leaseKey}. First condition: {concludedKeys.Contains(leaseKey)}. Second Condition: {keyAccessChange[leaseKey]}\n");
+                                Console.WriteLine($"Continue 2 for key: {leaseKey}. First condition: {concludedKeys.Contains(leaseKey)}. Second Condition: {keyAccessChange[leaseKey]}");
                                 continue;
                             }
 
@@ -322,15 +311,12 @@ namespace TServer.Services
                         }
                     }
                 }
-
                 // End of critical section
             }
 
             // responds with the DadInts the client wants to read
-            // If it they do not exist, returns an empty list
+            // If they do not exist, returns an empty list
             TxSubmitReply reply = new TxSubmitReply { DadInts = { dadIntsToReply } };
-
-            // TODO before replying broadcast to the other TServers and update the DadInts values
 
             Console.WriteLine("\nCONCLUDED TRANSACTION\n");
 
@@ -394,6 +380,7 @@ namespace TServer.Services
             }
         }
 
+        // Function that releases the lease for a certain key, giving the lease to the next in queue
         public ReleaseLeaseReply ReleaseLease(ReleaseLeaseRequest request)
         {
             // Start of critical section
@@ -433,12 +420,16 @@ namespace TServer.Services
             }
         }
 
+        // Function evoked when some TManager suspect that a lease is being held by a crashed manager
         public AskReleaseReply AskRelease(AskReleaseRequest request) 
         {
             lock (this)
             {
                 if (this.keyAccessQueue.ContainsKey(request.Key))
                 {
+                    // If the peek of the queue of the key corresponds to the ID of:
+                    // - From: Perhaps the server that sent the request didn't receive the releaseLease from the server that had the lease
+                    // - To: Perhaps the server is really crashed and is holding a lease
                     if (this.keyAccessQueue[request.Key].Peek() == request.From || this.keyAccessQueue[request.Key].Peek() == request.To)
                     {
                         this.keyAccessQueue[request.Key].Dequeue();
@@ -451,8 +442,7 @@ namespace TServer.Services
             }
         }
         
-        // when the LServer leader broadcasts its leaseQueue, TServer receives it
-        // and populates their own access lease dictionary
+        // Evoked at the start of every epoch, LManagers send to the TManagers the queue of leases to be used in this epoch
         public SendLeasesReply SendLeases(SendLeasesRequest request)
         {
             // Start of critical section
@@ -464,7 +454,6 @@ namespace TServer.Services
                 List<string> wantKey = new List<string>();
 
                 // Populate the keyAccess dictionary
-                // TODO - verify if it is populated in the right order
                 if (request.Leases.Count > 0)
                 {
                     foreach (Lease lease in request.Leases)
@@ -513,12 +502,6 @@ namespace TServer.Services
 
         public StatusReply State(StatusRequest request)
         {
-            /* TODO - is this necessary ??
-            if (client == null) {
-                this.channel = GrpcChannel.ForAddress("http://localhost:10000");
-                this.client = new ClientTServerService.ClientTServerServiceClient(channel);
-            }*/
-
             // TODO - use a broadcast algorithm to contact the other servers (2PC p.e)
             StatusReply reply = new StatusReply { Status = true };
 
