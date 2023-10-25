@@ -60,7 +60,7 @@ class Program
         int duration = config.Slot.Item2;
 
         // All the functions of the TServer will be done here
-        TServerService tServerService = new TServerService(processId, tServers, lServers, processStates);
+        TServerService tServerService = new TServerService(processId, tServers, lServers, duration, processStates);
 
         // All of the function call async related to clients, tservers and lservers
         TServerService_Client clientService = new TServerService_Client(tServerService);

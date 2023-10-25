@@ -1,4 +1,5 @@
-﻿using Grpc.Core;
+﻿using Google.Protobuf.WellKnownTypes;
+using Grpc.Core;
 using Grpc.Net.Client;
 using LServer.Services;
 using Protos;
@@ -70,7 +71,7 @@ class Program
 
         // All the functions of the LServer will be done here
         lServers.Remove(processId);
-        LServerService lServerService = new LServerService(processId, serverId, lServers, tServers, lServerIds, processStates);
+        LServerService lServerService = new LServerService(processId, serverId, lServers, tServers, lServerIds, duration, processStates);
 
         // All of the function call async related to clients, tservers and lservers
         LServerService_TServer tServerService = new LServerService_TServer(lServerService);

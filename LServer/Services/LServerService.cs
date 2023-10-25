@@ -28,6 +28,7 @@ namespace LServer.Services
         private Dictionary<string, TServerLServerService.TServerLServerServiceClient> tServerInstances = new Dictionary<string, TServerLServerService.TServerLServerServiceClient>();
         private Dictionary<string, string> lServers;
         private Dictionary<string, string> tServers;
+        private int epochDuration;
 
         private Dictionary<string, ServerProcessState>[] processStates;
 
@@ -42,14 +43,20 @@ namespace LServer.Services
         List<Lease> leaseQueue = new List<Lease>();
         List<Lease> broadcastLeaseQueue = new List<Lease>();  // this is the value in paxos algorithm
 
-        public LServerService(string lManagerID, int serverId, Dictionary<string, string> lServers, 
-            Dictionary<string, string> tServers, List<int> lServersId, Dictionary<string, ServerProcessState>[] ProcessStates) 
+        public LServerService(string lManagerID,
+                              int serverId,
+                              Dictionary<string, string> lServers,
+                              Dictionary<string, string> tServers,
+                              List<int> lServersId,
+                              int duration,
+                              Dictionary<string, ServerProcessState>[] ProcessStates) 
         {
             this.lManagerID = lManagerID;
             this.lServers = lServers;
             this.tServers = tServers;
             this.serverId = serverId;
             this.lServersId = lServersId;
+            this.epochDuration = duration;
             this.processStates = ProcessStates;
             this.leaderId = 0;          // LeaderId is always > 0 ((for now))
            
@@ -153,7 +160,7 @@ namespace LServer.Services
             }
             
             // waits some time for responses
-            Task.WaitAll(taskList.ToArray(), 1000);
+            Task.WaitAll(taskList.ToArray(), this.epochDuration / 10);
 
             // takes of the queue the first n elements that were broadcast
             lock (leaseQueue)
@@ -358,7 +365,7 @@ namespace LServer.Services
                 
                 // Waits for some prepare/accept
                 // if doesn't receive any from the leader in the beginning of the epoch
-                Thread.Sleep(4000);
+                Thread.Sleep(this.epochDuration / 2);
                 // if leader is dead, add to the suspected list
                 if (this.isLeaderDead)
                 {
@@ -411,7 +418,7 @@ namespace LServer.Services
                 }
 
                 // waits some time for responses
-                Task.WaitAll(pTasks.ToArray(), 1500);
+                Task.WaitAll(pTasks.ToArray(), this.epochDuration / 6);
 
                 // If the promise replies are not the majority, the prepare phase has failed
                 if (promiseReplies.Count < (this.lServersId.Count - this.lServersSuspected.Count) / 2)
@@ -485,7 +492,7 @@ namespace LServer.Services
             }
 
             // waits some time for responses
-            Task.WaitAll(aTasks.ToArray(), 1000);
+            Task.WaitAll(aTasks.ToArray(), this.epochDuration / 10);
 
             // If the accepted replies are not the majority, the accept phase has failed
             if (acceptedReplies.Count < (this.lServersId.Count - this.lServersSuspected.Count) / 2)

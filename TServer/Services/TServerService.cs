@@ -28,6 +28,7 @@ namespace TServer.Services
         private string tManagerId;
         private Dictionary<string, string> lServers;
         private Dictionary<string, string> tServers;
+        private int epochDuration;
         private Dictionary<string, DadInt> dadInts = new Dictionary<string, DadInt> ();
         private List<int> tServersSuspected = new List<int>();
 
@@ -49,12 +50,16 @@ namespace TServer.Services
 
 
         // set all the server information from config
-        public TServerService(string tManagerId, Dictionary<string, string> tServers, Dictionary<string, string> lServers,
-            Dictionary<string, ServerProcessState>[] ProcessStates)
+        public TServerService(string tManagerId,
+                              Dictionary<string, string> tServers,
+                              Dictionary<string, string> lServers,
+                              int duration,
+                              Dictionary<string, ServerProcessState>[] ProcessStates)
         {
             this.tManagerId = tManagerId;
             this.tServers = tServers;
             this.lServers = lServers;
+            this.epochDuration = duration;
             this.processStates = ProcessStates;
 
             // Majority should be half the servers plus one. However we don't add one to exclude the self TManager.
@@ -183,7 +188,7 @@ namespace TServer.Services
             // TODO
             // wait for the majority of the tasks to get a response
             // sort what it receives and return one reply to the function Transaction
-            Task.WaitAll(askLeaseReplies.ToArray(), 500);
+            Task.WaitAll(askLeaseReplies.ToArray(), this.epochDuration/20);
 
             // for now it returns the first response
             AskLeaseReply askLeaseReply = askLeaseReplies.First().Result;
@@ -295,7 +300,7 @@ namespace TServer.Services
                                 var askReleaseReply = tServer.Value.AskReleaseAsync(askReleaseRequest);
                                 taskList.Add(askReleaseReply.ResponseAsync);
                             }
-                            Task.WaitAll(taskList.ToArray(), 500);
+                            Task.WaitAll(taskList.ToArray(), this.epochDuration / 20);
 
                             // Check if the responses where majorly positive
                             foreach (var task in taskList)
@@ -359,7 +364,7 @@ namespace TServer.Services
                         Console.WriteLine($"Realesed Lease of Key: {key} and ID: {this.tManagerId}");
                     }
                 }
-                Task.WaitAll(releaseReplyList.ToArray(), 500);
+                Task.WaitAll(releaseReplyList.ToArray(), this.epochDuration / 20);
 
                 int completedTask = 0;
                 foreach (var task in releaseReplyList)
