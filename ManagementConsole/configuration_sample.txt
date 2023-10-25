@@ -34,7 +34,7 @@ S 100
 T 12:10:15
 #
 # Each time slots lasts 10000 miliseconds
-D 10000 
+D 5000
 #
 # F commands describe the state of server processes
 #

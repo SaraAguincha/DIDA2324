@@ -28,15 +28,15 @@ namespace TServer.Services
         private string tManagerId;
         private Dictionary<string, string> lServers;
         private Dictionary<string, string> tServers;
+        private Dictionary<string, string> allTServers;
         private int epochDuration;
         private Dictionary<string, DadInt> dadInts = new Dictionary<string, DadInt> ();
-        private List<int> tServersSuspected = new List<int>();
-
 
         // ReleasesRequests that arrived too early.
         private List<ReleaseLeaseRequest> releasesPending = new List<ReleaseLeaseRequest> ();
         // TManagers' queue of access for each key
         private Dictionary<string, Queue<string>> keyAccessQueue = new Dictionary<string, Queue<string>>();
+
         // Count how many epochs a certain key has gone without a change of lease even while having TManagers next in the queue
         private Dictionary<string, int> keyAccessChange = new Dictionary<string, int> ();
 
@@ -61,6 +61,7 @@ namespace TServer.Services
         {
             this.tManagerId = tManagerId;
             this.tServers = tServers;
+            this.allTServers = tServers;
             this.lServers = lServers;
             this.epochDuration = duration;
             this.processStates = ProcessStates;
@@ -126,6 +127,8 @@ namespace TServer.Services
             // Resets the counter of leases received
             consensusLeasesReceived = 0;
 
+            this.tServers = this.allTServers;
+
             // Kill the process if it's crashed in the process state for this epoch
             if (processStates[epoch - 1] != null)
             {
@@ -146,10 +149,8 @@ namespace TServer.Services
                         // Add the suspected servers to the list by their last character
                         foreach (string suspect in server.Value.Suspects.Item2)
                         {
-                            if (!this.tServersSuspected.Contains(Int32.Parse(suspect.Substring(suspect.Length - 1))))
-                            {
-                                this.tServersSuspected.Add(Int32.Parse(suspect.Substring(suspect.Length - 1)));
-                            }
+                            if (this.tServers.ContainsKey(suspect))
+                                this.tServers.Remove(suspect);
                         }
                     }
                 }
@@ -406,6 +407,7 @@ namespace TServer.Services
                 {
                     if (keyAccessQueue[release.Key].Peek() == release.TManagerId)
                     {
+                        this.releasesPending.Remove(release);
                         this.keyAccessQueue[release.Key].Dequeue();
                         this.keyAccessChange[release.Key] = 0;
                         Monitor.PulseAll(this);
@@ -422,7 +424,7 @@ namespace TServer.Services
                 {
                     this.releasesPending.Add(request);
                     return new ReleaseLeaseReply { Ack = false };
-                }
+                }      
             }
             catch
             {
@@ -534,7 +536,7 @@ namespace TServer.Services
         public TStatusReply State(TStatusRequest request)
         {
             //Print the server id and the status
-            Console.WriteLine("I am server " + this.tManagerId + " and I am alive!");
+            //Console.WriteLine("I am server " + this.tManagerId + " and I am alive!");
 
             TStatusReply reply = new TStatusReply { Status = true };
 
