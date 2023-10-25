@@ -68,7 +68,7 @@ namespace Client.Services
                 }
                 catch (Grpc.Core.RpcException e)
                 {
-                    Console.WriteLine("TStatus Error: " + e.Message);
+                    Console.WriteLine("Server " + tServer.Key + " is unavailable.");
                     return false;
                 }
             }
@@ -82,7 +82,7 @@ namespace Client.Services
                 }
                 catch (Grpc.Core.RpcException e)
                 {
-                    Console.WriteLine("LStatus Error: " + e.Message);
+                    Console.WriteLine("Server " + lServer.Key + " is unavailable.");
                     return false;
                 }
             }
