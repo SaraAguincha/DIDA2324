@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package protos;
+
+// Commands that the client can use
+service ClientLServerService {
+	rpc LStatus (LStatusRequest) returns (LStatusReply);
+}
+
+// Requests the states of all the nodes in the system
+message LStatusRequest {
+	bool ok = 1;
+}
+
+message LStatusReply {
+	bool status = 1;
+}

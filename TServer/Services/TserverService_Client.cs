@@ -19,7 +19,7 @@ namespace TServer.Services
             this.tServerService = TServerService;
         }
 
-        public override Task<StatusReply> Status(StatusRequest request, ServerCallContext context)
+        public override Task<TStatusReply> TStatus(TStatusRequest request, ServerCallContext context)
         {
             Console.WriteLine("-----------------------");
             Console.WriteLine("Host: " + context.Host);

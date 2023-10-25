@@ -16,6 +16,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <Protobuf Include="..\protos\ClientToTServer.proto" GrpcServices="Both" Link="protos\ClientToTServer.proto" />
+	<Protobuf Include="..\protos\ClientToLServer.proto" GrpcServices="Both" Link="protos\ClientToLServer.proto" />
     <ProjectReference Include="..\Utilities\Utilities.csproj" />
   </ItemGroup>
 

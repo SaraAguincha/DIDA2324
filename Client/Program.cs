@@ -36,13 +36,21 @@ class Program
             {   GrpcChannel channel = GrpcChannel.ForAddress(value.Url);
                 return new ClientTServerService.ClientTServerServiceClient(channel);
             }
-        );  
+        );
+        Dictionary<string, ClientLServerService.ClientLServerServiceClient> lServers = config.LServers.ToDictionary(
+            key => key.Id,
+            value =>
+            {
+                GrpcChannel channel = GrpcChannel.ForAddress(value.Url);
+                return new ClientLServerService.ClientLServerServiceClient(channel);
+            }
+        );
 
         // Get the slot duration
         int duration = config.Slot.Item2;
 
         // Create the client service
-        ClientService client = new ClientService(processId, tServers);
+        ClientService client = new ClientService(processId, tServers, lServers);
 
         // Get the client script
         string solutionDir = Resources.GetSolutionDirectoryInfo();
@@ -145,7 +153,9 @@ class Program
                     }
 
                     bool statReply = client.Status().Result;
-                    Console.WriteLine("Status: server responded with " + statReply);
+                    
+                    if (statReply) { Console.WriteLine("Sent a status request to all servers."); }
+                    else { Console.WriteLine("Could not send a status request to all servers."); }
                     break;
 
                 // Ignore comments

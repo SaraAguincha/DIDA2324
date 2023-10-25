@@ -5,7 +5,7 @@ package protos;
 // Commands that the client can use
 service ClientTServerService {
 	rpc TxSubmit (TxSubmitRequest) returns (TxSubmitReply);
-	rpc Status (StatusRequest) returns (StatusReply);
+	rpc TStatus (TStatusRequest) returns (TStatusReply);
 }
 
 /* Request for a Transaction
@@ -29,14 +29,11 @@ message TxSubmitReply {
 }
 
 // Requests the states of all the nodes in the system
-message StatusRequest {
+message TStatusRequest {
 	bool ok = 1;
 }
 
-// Reply with a list with all the system nodes
-// TODO - define the node identifier
-message StatusReply {
-	//repeated string status = 1;
+message TStatusReply {
 	bool status = 1;
 }
 

@@ -5,21 +5,25 @@ using Protos;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace Client.Services
 {
-    public class ClientService : ClientTServerService.ClientTServerServiceBase
+    public class ClientService
     {
         private string clientId;
         private Dictionary<string, ClientTServerService.ClientTServerServiceClient> tServers;
+        private Dictionary<string, ClientLServerService.ClientLServerServiceClient> lServers;
         private ClientTServerService.ClientTServerServiceClient server;
 
-        public ClientService(string ClientId, Dictionary<string, ClientTServerService.ClientTServerServiceClient> TServers)
+        public ClientService(string ClientId, Dictionary<string, ClientTServerService.ClientTServerServiceClient> TServers,
+            Dictionary<string, ClientLServerService.ClientLServerServiceClient> LServers)
         {
             this.clientId = ClientId;
             this.tServers = TServers;
+            this.lServers = LServers;
 
             // Pick a random TServer to send the request (DEFAULT)
             Random random = new Random();
@@ -54,19 +58,36 @@ namespace Client.Services
         // Asynchronous Status call
         public async Task<bool> Status()
         {
-            StatusRequest request = new StatusRequest { Ok = true };
+            // Send a tstatus request to all TServers and an lstatus request to all LServers
+            TStatusRequest tRequest = new TStatusRequest { Ok = true };
+            foreach (KeyValuePair<string, ClientTServerService.ClientTServerServiceClient> tServer in this.tServers)
+            {
+                try
+                {   
+                    TStatusReply tReply = await tServer.Value.TStatusAsync(tRequest);
+                }
+                catch (Grpc.Core.RpcException e)
+                {
+                    Console.WriteLine("TStatus Error: " + e.Message);
+                    return false;
+                }
+            }
 
-            // Perform a try catch to submit the status request and catch exceptions
-            try
+            LStatusRequest lRequest = new LStatusRequest { Ok = true };
+            foreach (KeyValuePair<string, ClientLServerService.ClientLServerServiceClient> lServer in this.lServers)
             {
-                StatusReply reply = await server.StatusAsync(request);
-                return reply.Status;
+                try
+                {
+                    LStatusReply lReply = await lServer.Value.LStatusAsync(lRequest);
+                }
+                catch (Grpc.Core.RpcException e)
+                {
+                    Console.WriteLine("LStatus Error: " + e.Message);
+                    return false;
+                }
             }
-            catch (Grpc.Core.RpcException e)
-            {
-                Console.WriteLine("Status Error: " + e.Message);
-                return false;
-            }
+
+            return true;
         }
     }
 }

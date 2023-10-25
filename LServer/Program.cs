@@ -78,6 +78,8 @@ class Program
 
         LServerService_Paxos paxosService = new LServerService_Paxos(lServerService);
 
+        LServerService_Client clientService = new LServerService_Client(lServerService);
+
         // Bind all the services:
         // Client Services          (Client Commands)   -> currently the only one
         // TManagerServer Services  (Info disclosure)
@@ -85,7 +87,8 @@ class Program
         Server server = new Server
         {
             Services = { TServerLServerService.BindService(tServerService),
-                         PaxosService.BindService(paxosService)},
+                         PaxosService.BindService(paxosService),
+                         ClientLServerService.BindService(clientService) },
             Ports = { serverPort }
         };
 

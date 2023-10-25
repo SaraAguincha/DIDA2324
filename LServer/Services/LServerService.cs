@@ -279,8 +279,10 @@ namespace LServer.Services
             // Update the epoch
             this.epoch = epoch;
 
-            Console.WriteLine("Leases in broadcast: " + broadcastLeaseQueue.Count);
-
+            lock (broadcastLeaseQueue)
+            {
+                Console.WriteLine("Leases in broadcast: " + broadcastLeaseQueue.Count);
+            }
 
             // Get the suspected lServers from the processStates and add them to the list
             if (processStates[epoch - 1] != null)
@@ -535,6 +537,17 @@ namespace LServer.Services
                         leaseQueue.Add(lease);
                 }
             }
+        }
+
+        // State function to reply to client lstatues requests
+        public LStatusReply State(LStatusRequest request)
+        {
+            // Print who this server is and who the leader is
+            Console.WriteLine("I am server " + this.serverId + " and the leader is " + this.leaderId);
+
+            LStatusReply reply = new LStatusReply { Status = true };
+
+            return reply;
         }
     }
 }

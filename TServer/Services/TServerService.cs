@@ -97,24 +97,27 @@ namespace TServer.Services
         public void slotBeginning(int epoch)
         {
             // DEBUG
-            Console.WriteLine("Key Access Queue:");
-            foreach (var item in keyAccessQueue)
+            lock (this)
             {
-                Console.Write($"Key: {item.Key} Queue Peek: {item.Value.Peek()} Queue Size: {item.Value.Count}\n");
-            }
-            /*Console.WriteLine("Dad Ints:");
-            foreach (var dadInt in this.dadInts)
-            {
-                Console.WriteLine($"Key: {dadInt.Value.Key} Value: {dadInt.Value.Val}\n");
-            }*/
-            // END OF DEBUG
+                Console.WriteLine("Key Access Queue:");
+                foreach (var item in keyAccessQueue)
+                {
+                    Console.Write($"Key: {item.Key} Queue Peek: {item.Value.Peek()} Queue Size: {item.Value.Count}\n");
+                }
+                /*Console.WriteLine("Dad Ints:");
+                foreach (var dadInt in this.dadInts)
+                {
+                    Console.WriteLine($"Key: {dadInt.Value.Key} Value: {dadInt.Value.Val}\n");
+                }*/
+                // END OF DEBUG
 
-            foreach (var key in keyAccessChange)
-            {
-                if (keyAccessQueue[key.Key].Count > 1)
-                    keyAccessChange[key.Key]++;
-                else
-                    keyAccessChange[key.Key] = 0;
+                foreach (var key in keyAccessChange)
+                {
+                    if (keyAccessQueue[key.Key].Count > 1)
+                        keyAccessChange[key.Key]++;
+                    else
+                        keyAccessChange[key.Key] = 0;
+                }
             }
 
             // Kill the process if it's crashed in the process state for this epoch
@@ -505,10 +508,13 @@ namespace TServer.Services
             }
         }
 
-        public StatusReply State(StatusRequest request)
+        // State function to reply to client tstatus requests
+        public TStatusReply State(TStatusRequest request)
         {
-            // TODO - use a broadcast algorithm to contact the other servers (2PC p.e)
-            StatusReply reply = new StatusReply { Status = true };
+            //Print the server id and the status
+            Console.WriteLine("I am server " + this.tManagerId + " and I am alive!");
+
+            TStatusReply reply = new TStatusReply { Status = true };
 
             return reply;
         }
