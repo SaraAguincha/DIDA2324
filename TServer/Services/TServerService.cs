@@ -48,6 +48,9 @@ namespace TServer.Services
         // Majority (calculated in the constructor)
         int majority = 0;
 
+        // Counter of replies of LMs, SendLeases service
+        int consensusLeasesReceived = 0;
+
 
         // set all the server information from config
         public TServerService(string tManagerId,
@@ -119,6 +122,9 @@ namespace TServer.Services
                         keyAccessChange[key.Key] = 0;
                 }
             }
+
+            // Resets the counter of leases received
+            consensusLeasesReceived = 0;
 
             // Kill the process if it's crashed in the process state for this epoch
             if (processStates[epoch - 1] != null)
@@ -391,6 +397,7 @@ namespace TServer.Services
         // Function that releases the lease for a certain key, giving the lease to the next in queue
         public ReleaseLeaseReply ReleaseLease(ReleaseLeaseRequest request)
         {
+
             // Start of critical section
             Monitor.Enter(this);
             try
@@ -453,59 +460,74 @@ namespace TServer.Services
         // Evoked at the start of every epoch, LManagers send to the TManagers the queue of leases to be used in this epoch
         public SendLeasesReply SendLeases(SendLeasesRequest request)
         {
-            // Start of critical section
-            Monitor.Enter(this);
-            try
+            //DEBUG
+            /*Console.WriteLine("Has received a leasequeue, has now received: " + consensusLeasesReceived);
+            foreach (Lease lease in request.Leases)
             {
-                Console.WriteLine($"Received the following number of leases: {request.Leases.Count}");
+                Console.WriteLine("RECEIVED:" + lease.Key);
+            }*/
 
-                List<string> wantKey = new List<string>();
-
-                // Populate the keyAccess dictionary
-                if (request.Leases.Count > 0)
+            // Only if has not updated the Leases in this epoch
+            if (consensusLeasesReceived == 0)
+            {
+                // Start of critical section
+                Monitor.Enter(this);
+                try
                 {
-                    foreach (Lease lease in request.Leases)
-                    {
-                        // for each key present in one lease, verify if the dictionary already has an entry
-                        // if it hasn't, add a new entry with that key
-                        // if it has, only adds the Tmanager to the Queue
-                        foreach (string key in lease.Key)
-                        {
-                            if (keyAccessQueue.ContainsKey(key))
-                            {
-                                keyAccessQueue[key].Enqueue(lease.TManagerId);
-                            }
-                            else
-                            {
-                                keyAccessQueue.Add(key, new Queue<string>(new[] { lease.TManagerId }));
-                                keyAccessChange[key] = 0;
-                            }
+                    Console.WriteLine($"Received the following number of leases: {request.Leases.Count}");
 
-                            if (lease.TManagerId == this.tManagerId)
-                                wantKey.Add(key);
-                        }
-                    }
-                    foreach (var keyAccess in keyAccessQueue)
+                    List<string> wantKey = new List<string>();
+
+                    // Populate the keyAccess dictionary
+                    if (request.Leases.Count > 0)
                     {
-                        if (keyAccess.Value.Peek() == this.tManagerId &&
-                            keyAccess.Value.Count > 1 &&
-                            !wantKey.Contains(keyAccess.Key))
+                        foreach (Lease lease in request.Leases)
                         {
-                            //Console.WriteLine("\nInertia BroadcastRelease\n");
-                            BroadcastRelease(keyAccess.Key, this.dadInts[keyAccess.Key].Val, true);
+                            // for each key present in one lease, verify if the dictionary already has an entry
+                            // if it hasn't, add a new entry with that key
+                            // if it has, only adds the Tmanager to the Queue
+                            foreach (string key in lease.Key)
+                            {
+                                if (keyAccessQueue.ContainsKey(key))
+                                {
+                                    keyAccessQueue[key].Enqueue(lease.TManagerId);
+                                }
+                                else
+                                {
+                                    keyAccessQueue.Add(key, new Queue<string>(new[] { lease.TManagerId }));
+                                    keyAccessChange[key] = 0;
+                                }
+
+                                if (lease.TManagerId == this.tManagerId)
+                                    wantKey.Add(key);
+                            }
+                        }
+                        foreach (var keyAccess in keyAccessQueue)
+                        {
+                            if (keyAccess.Value.Peek() == this.tManagerId &&
+                                keyAccess.Value.Count > 1 &&
+                                !wantKey.Contains(keyAccess.Key))
+                            {
+                                //Console.WriteLine("\nInertia BroadcastRelease\n");
+                                BroadcastRelease(keyAccess.Key, this.dadInts[keyAccess.Key].Val, true);
+                            }
                         }
                     }
+                    // Notify that there has been a change to keyAccessQueue
+                    Monitor.PulseAll(this);
+                    return new SendLeasesReply { Ack = true };
                 }
-                // Notify that there has been a change to keyAccessQueue
-                Monitor.PulseAll(this);
-                return new SendLeasesReply { Ack = true };
+                catch { return new SendLeasesReply { Ack = false }; }
+                finally
+                {
+                    // End of critical section
+                    Monitor.Exit(this);
+                    consensusLeasesReceived++;
+                }
             }
-            catch { return new SendLeasesReply { Ack = false }; }
-            finally
-            {
-                // End of critical section
-                Monitor.Exit(this);
-            }
+
+            consensusLeasesReceived++;
+            return new SendLeasesReply { Ack = true };
         }
 
         // State function to reply to client tstatus requests

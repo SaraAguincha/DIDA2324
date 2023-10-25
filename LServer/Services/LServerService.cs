@@ -122,13 +122,12 @@ namespace LServer.Services
         /* 
          * Send the Leases in the beginning of a new epoch
          * in the beginning of the epoch, after deciding a leader
-         * run the accept step of paxos, and send the current queue of leases to the tServers
+         * run the accept step of paxos, and send the broadcastLease queue of leases to the tServers
          */
         public bool BroadcastLeases()
         {
             Console.WriteLine("Broadcasting Leases!");
-            // Should have a lock when doing this
-            // Prepares the request
+         
             SendLeasesRequest leaseRequest = new SendLeasesRequest
             { 
                 Epoch = this.epoch,
@@ -140,7 +139,7 @@ namespace LServer.Services
 
             Console.WriteLine("Lease request has :" + leaseRequest.Leases.Count + " leases.");
 
-            // Sends the list to every TManager that has sent a request
+            // Sends the list to every TManager
             foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> tServerInstance in this.tServerInstances)
             {
                 Task task = Task.Run(() =>
@@ -168,7 +167,6 @@ namespace LServer.Services
                 leaseQueue.RemoveAll(lease => broadcastLeaseQueue.Contains(lease));
                 broadcastLeaseQueue.Clear(); 
             }
-            //Enumerable.Range(0, broadcastLeaseQueue.Count).Select(i => leaseQueue.Dequeue()).ToList();
 
             // TODO - for now it returns the first response received
             // verify if received, else the values will be lost
@@ -338,7 +336,7 @@ namespace LServer.Services
                 // TODO - if it doesn't succeed, backoff time and repeats. Stops when a promise reply sends a Nack, with the current leader being different
                 switch (succeededPrepare)
                 {
-                    // Everything went fine and can broadcast the leases
+                    // Everything went fine and leader can broadcast the leases
                     case 1:
                         this.backoffTime = 100;
                         BroadcastLeases();
@@ -379,7 +377,11 @@ namespace LServer.Services
                     this.leaderId = currentLeaderId;
                 }
                 else
+                {
                     Console.WriteLine("Everything is fine, Leader is alive and responsive!");
+                    Console.WriteLine("Acceptor will now broadcastLeases");
+                    BroadcastLeases();
+                }
 
                 this.backoffTime = 100;
             }
@@ -423,7 +425,7 @@ namespace LServer.Services
                 Task.WaitAll(pTasks.ToArray(), this.epochDuration / 6);
 
                 // If the promise replies are not the majority, the prepare phase has failed
-                if (promiseReplies.Count < (this.lServersId.Count - this.lServersSuspected.Count) / 2)
+                if (promiseReplies.Count < (this.lServersId.Count / 2) )
                 {
                     Console.WriteLine("Leader Failed in promise replies...: " + promiseReplies.Count);
                     this.isLeader = false;
@@ -497,7 +499,7 @@ namespace LServer.Services
             Task.WaitAll(aTasks.ToArray(), this.epochDuration / 10);
 
             // If the accepted replies are not the majority, the accept phase has failed
-            if (acceptedReplies.Count < (this.lServersId.Count - this.lServersSuspected.Count) / 2)
+            if (acceptedReplies.Count < (this.lServersId.Count / 2) )
             {
                 Console.WriteLine("Leader Failed in accept replies...: " + acceptedReplies.Count);
                 this.isLeader = false;
