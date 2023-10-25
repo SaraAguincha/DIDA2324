@@ -1,7 +1,5 @@
 ﻿using Client.Services;
-using Google.Protobuf;
 using Google.Protobuf.Collections;
-using Grpc.Core;
 using Grpc.Net.Client;
 using Protos;
 using System.Text.RegularExpressions;
@@ -57,10 +55,11 @@ class Program
         string scriptPath = solutionDir + "\\Client\\Scripts\\" + script + ".txt";
         Console.WriteLine("Script path: " + scriptPath);
 
+
         // Read and parse the client script
         string[] lines = File.ReadAllLines(scriptPath);
 
-        foreach(string line in lines)
+        foreach (string line in lines)
         {
             string[] strings = line.Split(" ", StringSplitOptions.RemoveEmptyEntries);
 
@@ -141,7 +140,7 @@ class Program
                         break;
                     }
                     Console.WriteLine("Waiting for " + waitTime + " milliseconds.");
-                    System.Threading.Thread.Sleep(waitTime);
+                    Thread.Sleep(waitTime);
                     Console.WriteLine("Finished waiting"); 
                     break;
 

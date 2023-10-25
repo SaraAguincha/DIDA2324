@@ -14,6 +14,8 @@ namespace Client.Services
     public class ClientService
     {
         private string clientId;
+        private string currentServerId;
+        private List<string> unavailableServers = new List<string>();
         private Dictionary<string, ClientTServerService.ClientTServerServiceClient> tServers;
         private Dictionary<string, ClientLServerService.ClientLServerServiceClient> lServers;
         private ClientTServerService.ClientTServerServiceClient server;
@@ -25,11 +27,13 @@ namespace Client.Services
             this.tServers = TServers;
             this.lServers = LServers;
 
-            // Pick a random TServer to send the request (DEFAULT)
+            // Initialy pick a random TServer to send the request (DEFAULT)
             Random random = new Random();
             int index = random.Next(TServers.Count);
             this.server = TServers.ElementAt(index).Value;
-            Console.WriteLine("Client " + clientId + " connected to TServer " + TServers.ElementAt(index).Key);
+            this.currentServerId = TServers.ElementAt(index).Key;
+
+            Console.WriteLine("Client " + clientId + " connected to TServer " + currentServerId);
 
             // (FOR TESTING PURPOSES) THIS PICKS THE FIRST TSERVER, UNCOMMENT/COMMENT THE ABOVE LINES AND THIS ONE TO CHANGE THIS
             //this.server = TServers.ElementAt(0).Value;
@@ -48,9 +52,22 @@ namespace Client.Services
                 TxSubmitReply reply = await server.TxSubmitAsync(request);
                 return reply.DadInts;
             }
-            catch (Grpc.Core.RpcException e)
+            catch (RpcException)
             {
-                Console.WriteLine("TxSubmit Error: " + e.Message);
+                unavailableServers.Add(currentServerId);
+                Console.WriteLine("TxSubmit Error: The current " + currentServerId + " is unavailable");
+                
+                foreach (string tMServer in  tServers.Keys)
+                {
+                    if (!unavailableServers.Contains(tMServer))
+                    {
+                        this.server = tServers[tMServer];
+                        this.currentServerId = tMServer;
+                        Console.WriteLine("New connection made to: " + tMServer + ". \nPlease retry again now.");
+                        break;
+                    }
+                }
+
                 return null;
             }
         }
@@ -66,9 +83,10 @@ namespace Client.Services
                 {   
                     TStatusReply tReply = await tServer.Value.TStatusAsync(tRequest);
                 }
-                catch (Grpc.Core.RpcException e)
+                catch (RpcException)
                 {
                     Console.WriteLine("Server " + tServer.Key + " is unavailable.");
+                    unavailableServers.Add(tServer.Key);
                     return false;
                 }
             }
@@ -80,7 +98,7 @@ namespace Client.Services
                 {
                     LStatusReply lReply = await lServer.Value.LStatusAsync(lRequest);
                 }
-                catch (Grpc.Core.RpcException e)
+                catch (RpcException)
                 {
                     Console.WriteLine("Server " + lServer.Key + " is unavailable.");
                     return false;
