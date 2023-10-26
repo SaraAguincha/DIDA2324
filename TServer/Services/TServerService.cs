@@ -51,7 +51,6 @@ namespace TServer.Services
         // Counter of replies of LMs, SendLeases service
         int consensusLeasesReceived = 0;
 
-
         // set all the server information from config
         public TServerService(string tManagerId,
                               Dictionary<string, string> tServers,
@@ -196,7 +195,7 @@ namespace TServer.Services
             Task.WaitAll(askLeaseReplies.ToArray(), this.epochDuration / 20);
 
             // for now it returns the first response
-            AskLeaseReply askLeaseReply = askLeaseReplies.First().Result;
+            //AskLeaseReply askLeaseReply = askLeaseReplies.First().Result;
 
             int numberLeasesNeeded = reads.Count + writes.Count;
 
@@ -318,6 +317,23 @@ namespace TServer.Services
                 }
             }
             // End of critical section
+
+            // Data Persistency service. After Transaction is Concluded, send the changed values to the other TMs
+            // TODO - If majority doesnt accept, abort transaction
+
+            // If majority accepted, send data
+            try
+            {
+                foreach (var tServer in this.tServerInstances)
+                {
+                    tServer.Value.UpdateDataAsync(new UpdateDataRequest { DadInts = {writes} });
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception at transaction, update Data:" + ex.ToString());
+            }
+
             // responds with the DadInts the client wants to read
             // If they do not exist, returns an empty list
             TxSubmitReply reply = new TxSubmitReply { DadInts = { dadIntsToReply } };
@@ -563,6 +579,28 @@ namespace TServer.Services
                 Monitor.Exit(this);   
             }
         }
+
+        // Evoked when a TM as ended a transaction and received acks from majority
+        // TManagers propagated the written DadInts to the other TMs to have Data consistency
+        public UpdateDataReply SendData(UpdateDataRequest request)
+        {
+            lock (this)
+            {
+                // Updates the DadInt sent by the other TM
+                foreach (DadInt dInt in request.DadInts)
+                {
+                    // Updates the value with the one that was sent
+                    if (dadInts.ContainsKey(dInt.Key))
+                        dadInts[dInt.Key] = dInt;
+                    else
+                        dadInts.Add(dInt.Key, new DadInt(dInt));                    
+                }
+            }
+            UpdateDataReply reply = new UpdateDataReply { Ack = true };
+            return reply;
+        }
+
+
 
         // State function to reply to client tstatus requests
         public TStatusReply State(TStatusRequest request)
