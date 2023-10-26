@@ -5,6 +5,7 @@ using Grpc.Net.Client;
 using Protos;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -32,22 +33,21 @@ namespace TServer.Services
         private int epochDuration;
         private Dictionary<string, DadInt> dadInts = new Dictionary<string, DadInt> ();
 
-        // ReleasesRequests that arrived too early.
-        private List<ReleaseLeaseRequest> releasesPending = new List<ReleaseLeaseRequest> ();
+        // All received ReleasesRequests 
+        private List<ReleaseLeaseRequest> releasesList = new List<ReleaseLeaseRequest> ();
         // TManagers' queue of access for each key
-        private Dictionary<string, Queue<string>> keyAccessQueue = new Dictionary<string, Queue<string>>();
-
-        // Count how many epochs a certain key has gone without a change of lease even while having TManagers next in the queue
-        private Dictionary<string, int> keyAccessChange = new Dictionary<string, int> ();
-
+        private Dictionary<string, List<string>> attributedAccesses = new Dictionary<string, List<string>>();
+        // keyAccess: Value can be 1. Who should release the key 2. This TManager 3. Empty string (key no longer needed)
+        private Dictionary<string, string> keyAccess = new Dictionary<string, string> ();
+        // Count how many epochs a certain key has gone without a change of access to this tManager
+        private Dictionary<string, int> keyAccessKeep = new Dictionary<string, int> ();
+        // Data from configuration file
         private Dictionary<string, ServerProcessState>[] processStates;
-
         // All the active wanted leases for this TManager
         private List<string> activeLeaseKeys = new List<string> ();
 
         // Majority (calculated in the constructor)
         int majority = 0;
-
         // Counter of replies of LMs, SendLeases service
         int consensusLeasesReceived = 0;
 
@@ -100,28 +100,25 @@ namespace TServer.Services
         // Execute at the beginning of each epoch
         public void slotBeginning(int epoch)
         {
-            // DEBUG
             lock (this)
             {
-                Console.WriteLine("Key Access Queue:");
-                foreach (var item in keyAccessQueue)
+                // DEBUG
+                /*Console.WriteLine("Attributed Accesses:");
+                foreach (var item in attributedAccesses)
                 {
-                    Console.Write($"Key: {item.Key} Queue Peek: {item.Value.Peek()} Queue Size: {item.Value.Count}\n");
+                    Console.Write($"Key: {item.Key} Queue Peek: {item.Value[0]} Queue Size: {item.Value.Count}\n");
                 }
+                Console.WriteLine("Key Access:");
+                foreach(var item in keyAccess)
+                {
+                    Console.WriteLine($"Key: {item.Key} Manager: {item.Value}");
+                }*/
                 /*Console.WriteLine("Dad Ints:");
                 foreach (var dadInt in this.dadInts)
                 {
                     Console.WriteLine($"Key: {dadInt.Value.Key} Value: {dadInt.Value.Val}\n");
                 }*/
                 // END OF DEBUG
-
-                foreach (var key in keyAccessChange)
-                {
-                    if (keyAccessQueue[key.Key].Count > 1)
-                        keyAccessChange[key.Key]++;
-                    else
-                        keyAccessChange[key.Key] = 0;
-                }
             }
 
             // Resets the counter of leases received
@@ -172,11 +169,10 @@ namespace TServer.Services
 
             foreach (string key in reads)
             {
-                if(!leaseKeys.Contains(key))
+                if (!leaseKeys.Contains(key))
                     leaseKeys.Add(key);
                 activeLeaseKeys.Add(key);
             }
-
             foreach (DadInt dadInt in writes)
             {
                 if (!leaseKeys.Contains(dadInt.Key))
@@ -185,7 +181,6 @@ namespace TServer.Services
             }
 
             AskLeaseRequest askLeaseRequest = new AskLeaseRequest { TManagerId = this.tManagerId, Key = { leaseKeys } };
-
             // requests a lease from all of the LServers
             List<Task<AskLeaseReply>> askLeaseReplies = new List<Task<AskLeaseReply>>();
             // for each LServer starts a task with a request
@@ -198,7 +193,7 @@ namespace TServer.Services
             // TODO
             // wait for the majority of the tasks to get a response
             // sort what it receives and return one reply to the function Transaction
-            Task.WaitAll(askLeaseReplies.ToArray(), this.epochDuration/20);
+            Task.WaitAll(askLeaseReplies.ToArray(), this.epochDuration / 20);
 
             // for now it returns the first response
             AskLeaseReply askLeaseReply = askLeaseReplies.First().Result;
@@ -212,7 +207,6 @@ namespace TServer.Services
             // Start of critical section
             lock (this)
             {
-
                 // While not all keys of the request have been written/read, the transaction is not complete
                 for (int i = 0; i < numberLeasesNeeded;)
                 {
@@ -222,47 +216,43 @@ namespace TServer.Services
                     foreach (var leaseKey in leaseKeys)
                     {
                         // If this manager is not allowed to access the key, check the next key
-                        if (!keyAccessQueue.ContainsKey(leaseKey) || keyAccessQueue[leaseKey].Peek() != tManagerId)
+                        if (!keyAccess.ContainsKey(leaseKey) || keyAccess[leaseKey] != tManagerId)
                             continue;
 
-                        else
+                        int value = 0;
+                        bool writtenValue = false;
+                        // Write to the key if present in the client request
+                        foreach (DadInt dInt in writes)
                         {
-                            int value = 0;
-                            bool writtenValue = false;
-                            // Write to the key if present in the client request
-                            foreach (DadInt dInt in writes)
+                            if (dInt.Key == leaseKey)
                             {
-                                if (dInt.Key == leaseKey)
-                                {
-                                    if (dadInts.ContainsKey(dInt.Key))
-                                        dadInts[dInt.Key] = dInt;
-                                    else
-                                        dadInts.Add(dInt.Key, new DadInt(dInt));
-                                    value = dInt.Val;
-                                    writtenValue = true;
-                                }
+                                if (dadInts.ContainsKey(dInt.Key))
+                                    dadInts[dInt.Key] = dInt;
+                                else
+                                    dadInts.Add(dInt.Key, new DadInt(dInt));
+                                value = dInt.Val;
+                                writtenValue = true;
                             }
-                            // Read the key if present in the client request
-                            foreach (string readKey in reads)
+                        }
+                        // Read the key if present in the client request
+                        foreach (string readKey in reads)
+                        {
+                            if (readKey == leaseKey)
                             {
-                                if (readKey == leaseKey)
-                                {
-                                    if (dadInts.ContainsKey(readKey))
-                                        dadIntsToReply.Add(dadInts[readKey]);
-                                }
+                                if (dadInts.ContainsKey(readKey))
+                                    dadIntsToReply.Add(dadInts[readKey]);
                             }
-                            // One of the keys was written/read, so we can increment i
-                            i++;
-                            readWriteOperation = true;
-                            activeLeaseKeys.Remove(leaseKey);
-                            //leaseKeys.Remove(leaseKey);
-                            // If there is another instance of the key in another requests, don't release the lease just yet
-                            if (!activeLeaseKeys.Contains(leaseKey))
-                            {
-                                concludedKeys.Add(leaseKey);
-                                BroadcastRelease(leaseKey, value, writtenValue);
-                            }
-                            continue;
+                        }
+                        // One of the keys was written/read, so we can increment i
+                        i++;
+                        readWriteOperation = true;
+                        activeLeaseKeys.Remove(leaseKey);
+                        //leaseKeys.Remove(leaseKey);
+                        // If there is another instance of the key in another requests, don't release the lease just yet
+                        if (!activeLeaseKeys.Contains(leaseKey))
+                        {
+                            concludedKeys.Add(leaseKey);
+                            BroadcastRelease(leaseKey, value, writtenValue);
                         }
                     }
                     // If no keys were written/read, wait for a pulse (a change in keyAccessQueue - invoked by ReleaseLease or SendLeases)
@@ -278,22 +268,15 @@ namespace TServer.Services
                         // After having received a pulse, the TManager that's holding the lease for some key might have crashed
                         foreach (var leaseKey in leaseKeys)
                         {
-                            
-                            if (!keyAccessChange.ContainsKey(leaseKey))
+                            // If the key was already concluded, move on to the next one
+                            // If the change of lease happened less than 2 epochs ago, continue to the next key
+                            if (!keyAccessKeep.ContainsKey(leaseKey) || concludedKeys.Contains(leaseKey) || keyAccessKeep[leaseKey] < 2)
                             {
                                 Console.WriteLine($"Continue 1 for key: {leaseKey}");
                                 continue;
                             }
 
-                            // If the key was already concluded, move on to the next one
-                            // If the change of lease happened less than 2 epochs ago, continue to the next key
-                            if (concludedKeys.Contains(leaseKey) || keyAccessChange[leaseKey] < 2)
-                            {
-                                Console.WriteLine($"Continue 2 for key: {leaseKey}. First condition: {concludedKeys.Contains(leaseKey)}. Second Condition: {keyAccessChange[leaseKey]}");
-                                continue;
-                            }
-
-                            Console.WriteLine($"\nAdvance for key: {leaseKey}\n");
+                            Console.WriteLine($"AVANCED FOR {leaseKey}");
 
                             // Number of positive acks
                             int quorum = 0;
@@ -303,14 +286,21 @@ namespace TServer.Services
                             {
                                 Key = leaseKey,
                                 From = this.tManagerId,
-                                To = keyAccessQueue[leaseKey].Peek() 
+                                To = keyAccess[leaseKey]
                             };
-                            foreach (var tServer in this.tServerInstances)
+                            try
                             {
-                                var askReleaseReply = tServer.Value.AskReleaseAsync(askReleaseRequest);
-                                taskList.Add(askReleaseReply.ResponseAsync);
+                                foreach (var tServer in this.tServerInstances)
+                                {
+                                    var askReleaseReply = tServer.Value.AskReleaseAsync(askReleaseRequest);
+                                    taskList.Add(askReleaseReply.ResponseAsync);
+                                }
+                                Task.WaitAll(taskList.ToArray(), this.epochDuration / 10);
                             }
-                            Task.WaitAll(taskList.ToArray(), this.epochDuration / 20);
+                            catch (Exception ex) 
+                            {
+                                Console.WriteLine("Exception at transaction:" + ex.ToString()); 
+                            }
 
                             // Check if the responses where majorly positive
                             foreach (var task in taskList)
@@ -318,24 +308,26 @@ namespace TServer.Services
                                 if (task.IsCompletedSuccessfully && task.Result.Ack)
                                     quorum++;
                             }
-                            if (quorum >= majority)
+                            if (quorum >= 0)
                             {
-                                keyAccessQueue[leaseKey].Dequeue();
-                                this.keyAccessChange[leaseKey] = 0;
+                                keyAccess[leaseKey] = "";
+                                this.keyAccessKeep[leaseKey] = 0;
                             }
                         }
                     }
                 }
-                // End of critical section
             }
-
+            // End of critical section
             // responds with the DadInts the client wants to read
             // If they do not exist, returns an empty list
             TxSubmitReply reply = new TxSubmitReply { DadInts = { dadIntsToReply } };
 
             Console.WriteLine("\nCONCLUDED TRANSACTION\n");
 
+            // TODO - Propagate written values (don't only send values when the leases change)
+
             return reply;
+            
         }
 
         // Function that broadcasts the release and releases locally if necessary
@@ -346,13 +338,13 @@ namespace TServer.Services
                 List<Task<ReleaseLeaseReply>> releaseReplyList = new List<Task<ReleaseLeaseReply>>();
                 lock (this)
                 {
-                    if (this.keyAccessQueue[key].Peek() != this.tManagerId)
+                    if (this.keyAccess[key] != this.tManagerId)
                     {
                         Console.WriteLine($"WARNING - Queue peek is wrong for: {key} and ID: {this.tManagerId}");
                         return false;
                     }
                     // Only release lease if any other TManager wants it
-                    if (this.keyAccessQueue[key].Count > 1)
+                    if (this.attributedAccesses[key].Last() != this.tManagerId)
                     {
                         foreach (var tServer in this.tServerInstances)
                         {
@@ -369,9 +361,9 @@ namespace TServer.Services
                             var releaseReply = tServer.Value.ReleaseLeaseAsync(releaseLeaseRequest);
                             releaseReplyList.Add(releaseReply.ResponseAsync);
                         }
-                        this.keyAccessQueue[key].Dequeue();
-                        this.keyAccessChange[key] = 0;
-                        Console.WriteLine($"Realesed Lease of Key: {key} and ID: {this.tManagerId}");
+                        this.keyAccess[key] = "";
+                        this.keyAccessKeep[key] = 0;
+                        Console.WriteLine($"\nRealesed Lease of Key: {key} and ID: {this.tManagerId}\n");
                     }
                 }
                 Task.WaitAll(releaseReplyList.ToArray(), this.epochDuration / 20);
@@ -403,28 +395,17 @@ namespace TServer.Services
             Monitor.Enter(this);
             try
             {
-                foreach (var release in this.releasesPending)
-                {
-                    if (keyAccessQueue[release.Key].Peek() == release.TManagerId)
-                    {
-                        this.releasesPending.Remove(release);
-                        this.keyAccessQueue[release.Key].Dequeue();
-                        this.keyAccessChange[release.Key] = 0;
-                        Monitor.PulseAll(this);
-                    }
-                }
-                if (keyAccessQueue[request.Key].Peek() == request.TManagerId)
-                {
-                    this.keyAccessQueue[request.Key].Dequeue();
-                    this.keyAccessChange[request.Key] = 0;
-                    Monitor.PulseAll(this);
-                    return new ReleaseLeaseReply { Ack = true };
-                }
-                else
-                {
-                    this.releasesPending.Add(request);
+                if (keyAccess[request.Key] == this.tManagerId)
                     return new ReleaseLeaseReply { Ack = false };
-                }      
+
+                this.releasesList.Add(request);
+                this.keyAccessKeep[request.Key] = 0;
+                if (keyAccess[request.Key] == request.TManagerId)
+                {
+                    this.keyAccess[request.Key] = this.tManagerId;
+                    Monitor.PulseAll(this);
+                }
+                return new ReleaseLeaseReply { Ack = true };    
             }
             catch
             {
@@ -440,96 +421,147 @@ namespace TServer.Services
         // Function evoked when some TManager suspect that a lease is being held by a crashed manager
         public AskReleaseReply AskRelease(AskReleaseRequest request) 
         {
-            lock (this)
+            // TODO - Think a bit about if this is a good idea
+            if (attributedAccesses[request.Key].Contains(this.tManagerId))
+                Monitor.PulseAll(this);
+            return new AskReleaseReply { Ack = true };
+            /*lock (this)
             {
-                if (this.keyAccessQueue.ContainsKey(request.Key))
+                Console.WriteLine($"\nASK RELEASE: From: {request.From} To: {request.To}\n");
+                // TManager is suspected anyways, reply with ack to the release
+                bool leaseWasReleased = false;
+                bool managerIsAlive = false;
+
+                if (this.attributedAccesses.ContainsKey(request.Key) && this.tServers.ContainsKey(request.To))
                 {
-                    // If the peek of the queue of the key corresponds to the ID of:
-                    // - From: Perhaps the server that sent the request didn't receive the releaseLease from the server that had the lease
-                    // - To: Perhaps the server is really crashed and is holding a lease
-                    if (this.keyAccessQueue[request.Key].Peek() == request.From || this.keyAccessQueue[request.Key].Peek() == request.To)
+                    foreach (var release in releasesList)
                     {
-                        this.keyAccessQueue[request.Key].Dequeue();
-                        this.keyAccessChange[request.Key] = 0;
-                        Monitor.PulseAll(this);
-                        return new AskReleaseReply { Ack = true };
+                        if (release.TManagerId == request.To)
+                        {
+                            if (release.Key == request.Key)
+                                leaseWasReleased = true;
+                            managerIsAlive = true;
+                        }
                     }
+                    // TODO - Implement this
+                    if (!leaseWasReleased && managerIsAlive)
+                    {
+                        return new AskReleaseReply { Ack = false };
+                    }
+
                 }
-                return new AskReleaseReply { Ack = false };
-            }
+                keyAccessKeep[request.Key] = 0;
+                if (attributedAccesses[request.Key].Contains(this.tManagerId))
+                    Monitor.PulseAll(this);
+                return new AskReleaseReply { Ack = true };
+            }*/
         }
         
         // Evoked at the start of every epoch, LManagers send to the TManagers the queue of leases to be used in this epoch
         public SendLeasesReply SendLeases(SendLeasesRequest request)
-        {
-            //DEBUG
-            /*Console.WriteLine("Has received a leasequeue, has now received: " + consensusLeasesReceived);
-            foreach (Lease lease in request.Leases)
+        { 
+            // Start of critical section
+            Monitor.Enter(this);
+            try
             {
-                Console.WriteLine("RECEIVED:" + lease.Key);
-            }*/
-
-            // Only if has not updated the Leases in this epoch
-            if (consensusLeasesReceived == 0)
-            {
-                // Start of critical section
-                Monitor.Enter(this);
-                try
+                // Only if has not updated the Leases in this epoch
+                if (consensusLeasesReceived != 0)
+                    return new SendLeasesReply { Ack = true };
+                var attributedAccessesCopy = attributedAccesses.ToDictionary(entry => entry.Key, entry => entry.Value);
+                foreach (var access in attributedAccessesCopy)
                 {
-                    Console.WriteLine($"Received the following number of leases: {request.Leases.Count}");
+                    attributedAccesses[access.Key] = new List<string> { access.Value.Last() };
+                }
 
-                    List<string> wantKey = new List<string>();
+                Console.WriteLine($"Received the following number of leases: {request.Leases.Count}");
 
-                    // Populate the keyAccess dictionary
-                    if (request.Leases.Count > 0)
+                List<string> wantKey = new List<string>();
+
+                // Populate the keyAccess dictionary
+                if (request.Leases.Count > 0)
+                {
+                    foreach (Lease lease in request.Leases)
                     {
-                        foreach (Lease lease in request.Leases)
+                        // for each key present in one lease, verify if the dictionary already has an entry
+                        // if it hasn't, add a new entry with that key
+                        // if it has, only adds the Tmanager to the Queue
+                        foreach (string key in lease.Key)
                         {
-                            // for each key present in one lease, verify if the dictionary already has an entry
-                            // if it hasn't, add a new entry with that key
-                            // if it has, only adds the Tmanager to the Queue
-                            foreach (string key in lease.Key)
+                            if (attributedAccesses.ContainsKey(key))
                             {
-                                if (keyAccessQueue.ContainsKey(key))
-                                {
-                                    keyAccessQueue[key].Enqueue(lease.TManagerId);
-                                }
-                                else
-                                {
-                                    keyAccessQueue.Add(key, new Queue<string>(new[] { lease.TManagerId }));
-                                    keyAccessChange[key] = 0;
-                                }
+                                attributedAccesses[key].Add(lease.TManagerId);
+                            }
+                            else
+                            {
+                                attributedAccesses.Add(key, new List<string> { lease.TManagerId });
+                                keyAccessKeep[key] = 0;
+                            }
 
-                                if (lease.TManagerId == this.tManagerId)
-                                    wantKey.Add(key);
-                            }
+                            if (lease.TManagerId == this.tManagerId)
+                                wantKey.Add(key);
                         }
-                        foreach (var keyAccess in keyAccessQueue)
+                    }
+                    foreach (var access in attributedAccesses)
+                    {
+                        string tManagerAccess = "";
+                        if (access.Value.Contains(this.tManagerId))
                         {
-                            if (keyAccess.Value.Peek() == this.tManagerId &&
-                                keyAccess.Value.Count > 1 &&
-                                !wantKey.Contains(keyAccess.Key))
-                            {
-                                //Console.WriteLine("\nInertia BroadcastRelease\n");
-                                BroadcastRelease(keyAccess.Key, this.dadInts[keyAccess.Key].Val, true);
-                            }
+                            int selfIndex = access.Value.IndexOf(this.tManagerId);
+                            tManagerAccess = access.Value[Math.Max(0, selfIndex - 1)];
                         }
+                        if (!keyAccess.ContainsKey(access.Key))
+                            keyAccess.Add(access.Key, tManagerAccess);
+                        keyAccess[access.Key] = tManagerAccess;
+
+                        /*if (access.Value.Contains(this.tManagerId) && access.Value.Count > 1)
+                            keyAccessKeep[access.Key]++;
+                        else
+                            keyAccessKeep[access.Key] = 0;*/
+
+                        if (access.Value[0] == this.tManagerId &&
+                            access.Value.Count > 1 &&
+                            !wantKey.Contains(access.Key))
+                        {
+                            Console.WriteLine("\nInertia BroadcastRelease\n");
+                            BroadcastRelease(access.Key, this.dadInts[access.Key].Val, true);
+                        }   
                     }
                     // Notify that there has been a change to keyAccessQueue
                     Monitor.PulseAll(this);
-                    return new SendLeasesReply { Ack = true };
-                }
-                catch { return new SendLeasesReply { Ack = false }; }
-                finally
-                {
-                    // End of critical section
-                    Monitor.Exit(this);
-                    consensusLeasesReceived++;
-                }
-            }
 
-            consensusLeasesReceived++;
-            return new SendLeasesReply { Ack = true };
+                }
+                foreach (var access in attributedAccesses)
+                {
+                    if (access.Value.Contains(this.tManagerId) && keyAccess[access.Key] != this.tManagerId)
+                        keyAccessKeep[access.Key]++;
+                    else
+                        keyAccessKeep[access.Key] = 0;
+                    if (keyAccessKeep[access.Key] >= 2 && request.Leases.Count == 0)
+                    {
+                        Monitor.PulseAll(this);
+                    }
+                }
+
+                releasesList = new List<ReleaseLeaseRequest>();
+                Console.WriteLine("Key Access:");
+                foreach (var item in keyAccess)
+                {
+                    Console.WriteLine($"Key: {item.Key} Manager: {item.Value} Keep: {keyAccessKeep[item.Key]}");
+                } 
+
+                return new SendLeasesReply { Ack = true };
+            }
+            catch (Exception ex) 
+            {
+                Console.WriteLine($"Exception at send leases: {ex}");
+                return new SendLeasesReply { Ack = false }; 
+            }
+            finally
+            {
+                // End of critical section
+                consensusLeasesReceived++;
+                Monitor.Exit(this);   
+            }
         }
 
         // State function to reply to client tstatus requests
