@@ -57,8 +57,6 @@ class Program
 
         while (true)
         {
-
-
             // Read and parse the client script
             string[] lines = File.ReadAllLines(scriptPath);
 

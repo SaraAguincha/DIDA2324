@@ -38,7 +38,7 @@ namespace Client.Services
         }
 
         // Asynchronous TxSubmit call
-        public async Task<RepeatedField<DadInt>> TxSubmit(List<string> reads, List<DadInt> writes)
+        public async Task<RepeatedField<DadInt>?> TxSubmit(List<string> reads, List<DadInt> writes)
         {
             TxSubmitRequest request = new TxSubmitRequest { ClientId = this.clientId, Key = { reads }, DadInts = { writes } };
 
