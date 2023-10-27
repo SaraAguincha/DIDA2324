@@ -35,10 +35,12 @@ message AskReleaseRequest {
 
 message AskReleaseReply {
 	bool ack = 1;
+	int32 value = 2;
 }
 
 message UpdateDataRequest {
 	repeated protos.DadInt dadInts = 1;
+	string tManagerId = 2;
 }
 
 message UpdateDataReply {
