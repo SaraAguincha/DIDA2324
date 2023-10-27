@@ -18,8 +18,6 @@ namespace TServer.Services
 {
     public class TServerService
     {
-        // TODO - store the clients connected to the server
-
         // Perhaps dictionaries are not the most efficient, but might help with debugging (hopefully C:)
         private Dictionary<string, GrpcChannel> channels = new Dictionary<string, GrpcChannel>();
         private Dictionary<string, TServerLServerService.TServerLServerServiceClient> lServerInstances = new Dictionary<string, TServerLServerService.TServerLServerServiceClient>();
@@ -189,13 +187,8 @@ namespace TServer.Services
                 AsyncUnaryCall<AskLeaseReply> leaseReply = lServerInstance.Value.AskLeaseAsync(askLeaseRequest);
                 askLeaseReplies.Add(leaseReply.ResponseAsync);
             }
-            // TODO
-            // wait for the majority of the tasks to get a response
-            // sort what it receives and return one reply to the function Transaction
             Task.WaitAll(askLeaseReplies.ToArray(), this.epochDuration / 20);
 
-            // for now it returns the first response
-            //AskLeaseReply askLeaseReply = askLeaseReplies.First().Result;
 
             int numberLeasesNeeded = reads.Count + writes.Count;
 
@@ -333,7 +326,7 @@ namespace TServer.Services
             // If they do not exist, returns an empty list
             TxSubmitReply reply = new TxSubmitReply { DadInts = { dadIntsToReply } };
 
-            Console.WriteLine("\nCONCLUDED TRANSACTION\n");
+            Console.WriteLine($"\nCONCLUDED TRANSACTION\nCLIENT: {request.ClientId}\n");
 
             // TODO - Propagate written values (don't only send values when the leases change)
 
