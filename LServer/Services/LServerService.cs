@@ -21,7 +21,8 @@ namespace LServer.Services
         private int leaderId;
 
         private List<int> lServersId;
-        private List<int> lServersSuspected = new List<int>();  // possibly a list with a string and an int
+        private List<int> suspects = new List<int>();
+        private List<int> isSuspectedBy = new List<int>();
 
         private Dictionary<string, GrpcChannel> channels = new Dictionary<string, GrpcChannel>();
         private Dictionary<string, PaxosService.PaxosServiceClient> lServerInstances = new Dictionary<string, PaxosService.PaxosServiceClient>();
@@ -282,20 +283,23 @@ namespace LServer.Services
                 Console.WriteLine("Leases in broadcast: " + broadcastLeaseQueue.Count);
             }
 
-            // Get the suspected lServers from the processStates and add them to the list
+            // Get the suspect lServers from the processStates and add them to the list
             if (processStates[epoch - 1] != null)
             {
+                // Remove all the suspects from the previous epoch
+                this.isSuspectedBy.Clear();
+
                 foreach (KeyValuePair<string, ServerProcessState> server in this.processStates[epoch - 1])
                 {
                     // Chech which entry is the current server
                     if (server.Key == this.lManagerID && server.Value.Suspects.Item1)
                     {
-                        // Add the suspected servers to the list by their last character
+                        // Add the suspect servers to the list by their last character
                         foreach (string suspect in server.Value.Suspects.Item2)
                         {
-                            if (!this.lServersSuspected.Contains(Int32.Parse(suspect.Substring(suspect.Length - 1))))
+                            if (!this.isSuspectedBy.Contains(Int32.Parse(suspect.Substring(suspect.Length - 1))))
                             {
-                                this.lServersSuspected.Add(Int32.Parse(suspect.Substring(suspect.Length - 1)));
+                                this.isSuspectedBy.Add(Int32.Parse(suspect.Substring(suspect.Length - 1)));
                             }
                         }
                     }
@@ -310,12 +314,12 @@ namespace LServer.Services
             // leaderId will always be the server with lower id, and not suspected
 
             // if the leader has not been defined or is suspected, calculates the new leader
-            if (this.leaderId == 0 || this.lServersSuspected.Contains(this.leaderId))
+            if (this.leaderId == 0 || this.suspects.Contains(this.leaderId))
             {
                 foreach (int sId in this.lServersId)
                 {
                     // makes it possible to loop through the Lservers
-                    if (sId > (this.leaderId % this.lServersId.Count) && !this.lServersSuspected.Contains(sId))
+                    if (sId > (this.leaderId % this.lServersId.Count) && !this.suspects.Contains(sId))
                     {
                         currentLeaderId = sId;
                         break;
@@ -370,9 +374,9 @@ namespace LServer.Services
                 if (this.isLeaderDead)
                 {
                     Console.WriteLine("Server Leader is possibly dead :(");
-                    if (!this.lServersSuspected.Contains(this.leaderId))
+                    if (!this.suspects.Contains(this.leaderId))
                     {
-                        this.lServersSuspected.Add(this.leaderId);
+                        this.suspects.Add(this.leaderId);
                     }
                     this.leaderId = currentLeaderId;
                 }
@@ -444,13 +448,13 @@ namespace LServer.Services
 
                 this.highestRoundId = currentRoundId;
                 Console.WriteLine("I am the leader: " + serverId + ", and ran the prepare phase.");
-                
-                // call a function to verify and update the Queue of leases in case of missing leases
-                /*foreach (PromiseReply promiseReply in promiseReplies)
+
+                // Verify and update the Queue of leases in case of missing leases
+                Console.WriteLine("Comparing lease queues.");
+                foreach (PromiseReply promiseReply in promiseReplies)
                 {
                     CompareLeaseQueue(promiseReply.Queue.ToList());
-                    Console.WriteLine("Comparing . . .");
-                }*/
+                }
             }
 
             // Accept Phase (Step 2)
@@ -506,13 +510,12 @@ namespace LServer.Services
                 return 0;
             }
 
-            // TODO - maybe not do it here
             // Reviews the suspected servers
             foreach (AcceptedReply acceptedReply in acceptedReplies)
             {
-                if (this.lServersSuspected.Contains(acceptedReply.ServerId))
+                if (this.suspects.Contains(acceptedReply.ServerId))
                 {
-                    this.lServersSuspected.Remove(acceptedReply.ServerId);
+                    this.suspects.Remove(acceptedReply.ServerId);
                 }
             }
 
@@ -528,7 +531,7 @@ namespace LServer.Services
         }
 
     
-        // not yet used, but eventually
+        // Compare the leaseQueue with the queue received from the promiseReply
         public void CompareLeaseQueue(List<Lease> acceptorsQueue)
         {
             foreach (Lease lease in acceptorsQueue)

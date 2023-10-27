@@ -118,10 +118,6 @@ namespace TServer.Services
                 // END OF DEBUG
             }
 
-            // Resets the counter of leases received
-            consensusLeasesReceived = 0;
-
-            this.tServers = this.allTServers;
 
             // Kill the process if it's crashed in the process state for this epoch
             if (processStates[epoch - 1] != null)
@@ -131,6 +127,11 @@ namespace TServer.Services
                     Environment.Exit(0);
                 }
             }
+
+            // Resets the counter of leases received
+            consensusLeasesReceived = 0;
+
+            this.tServers = this.allTServers;
 
             // Get the suspected lServers from the processStates and add them to the list
             if (processStates[epoch - 1] != null)
@@ -148,6 +149,12 @@ namespace TServer.Services
                         }
                     }
                 }
+            }
+
+            Console.WriteLine("Available tservers:");
+            foreach (KeyValuePair<string, string> tserver in this.tServers)
+            {
+                Console.Write(tserver.Key + " ");
             }
         }
 

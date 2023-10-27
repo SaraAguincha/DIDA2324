@@ -168,10 +168,10 @@ namespace Utilities
                             foreach (string[] suspect in suspects)
                             {
                                 // If the suspecting process is in the ordered list of all servers
-                                if (suspect[0] == allServers[i].Id)
+                                if (suspect[1] == allServers[i].Id)
                                 {
                                     suspectsBool = true;
-                                    suspectsId.Add(suspect[1]);
+                                    suspectsId.Add(suspect[0]);
                                 }
                             }
                         }
