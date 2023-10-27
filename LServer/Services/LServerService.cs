@@ -195,9 +195,6 @@ namespace LServer.Services
                 return reply;
             }
 
-            // TODO - Consider the fact that a proposer can fail after accept,
-            // i.e fill the "previousRoundId" and "queue" fields of the promiseReply.
-            // Consider using an accept request list
             if (request.RoundId > this.highestRoundId)
             {
                 this.highestRoundId = request.RoundId;
@@ -341,9 +338,8 @@ namespace LServer.Services
             // if the currentLeaderId is this server, waits for promiseReplies from the majority of lservers
             if (this.serverId == currentLeaderId)
             {
-                // TODO - maybe run BroadcastLeases asynchronously (we might want to know the result of the function, though)
                 int succeededPrepare = ConsensusLeader(currentLeaderId, epoch);
-                // TODO - if it doesn't succeed, backoff time and repeats. Stops when a promise reply sends a Nack, with the current leader being different
+
                 switch (succeededPrepare)
                 {
                     // Everything went fine and leader can broadcast the leases
