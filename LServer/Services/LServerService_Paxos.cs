@@ -16,24 +16,16 @@ namespace LServer.Services
             this.lServerService = lServerService;
         }
 
-        public override Task<PromiseReply> Prepare(PrepareRequest request, ServerCallContext context)
+        public override Task<PromiseReply?> Prepare(PrepareRequest request, ServerCallContext context)
         {
-            Console.WriteLine("-----------------------");
-            Console.WriteLine("Host: " + context.Host);
             Console.WriteLine("Method: " + context.Method);
-            Console.WriteLine("Peer: " + context.Peer);
-            Console.WriteLine("-----------------------");
 
             return Task.FromResult(lServerService.PaxosPrepare(request));
         }
 
-        public override Task<AcceptedReply> Accept(AcceptRequest request, ServerCallContext context)
+        public override Task<AcceptedReply?> Accept(AcceptRequest request, ServerCallContext context)
         {
-            Console.WriteLine("-----------------------");
-            Console.WriteLine("Host: " + context.Host);
             Console.WriteLine("Method: " + context.Method);
-            Console.WriteLine("Peer: " + context.Peer);
-            Console.WriteLine("-----------------------");
 
             return Task.FromResult(lServerService.PaxosAccept(request));
         }

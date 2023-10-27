@@ -22,6 +22,7 @@ namespace LServer.Services
 
         private List<int> lServersId;
         private List<int> suspects = new List<int>();
+        // Server name list, cuts connection with the servers in this list
         private List<int> isSuspectedBy = new List<int>();
 
         private Dictionary<string, GrpcChannel> channels = new Dictionary<string, GrpcChannel>();
@@ -40,7 +41,6 @@ namespace LServer.Services
         bool isLeaderDead = false;
         int backoffTime = 100;
 
-        Queue<AskLeaseRequest> leaseRequestQueue = new Queue<AskLeaseRequest>();
         List<Lease> leaseQueue = new List<Lease>();
         List<Lease> broadcastLeaseQueue = new List<Lease>();  // this is the value in paxos algorithm
 
@@ -65,7 +65,6 @@ namespace LServer.Services
             // populate all of lservers connections
             foreach (KeyValuePair<string, string> lServer in this.lServers)
             {
-                //Console.WriteLine(lserver.Value);
                 GrpcChannel channel = GrpcChannel.ForAddress(lServer.Value);
                 channels.Add(lServer.Key, channel);
                 lServerInstances.Add(lServer.Key, new PaxosService.PaxosServiceClient(channel));
@@ -74,7 +73,6 @@ namespace LServer.Services
             // populate all of tservers connections
             foreach (KeyValuePair<string, string> tServer in this.tServers)
             {
-                //Console.WriteLine(tserver.Value);
                 GrpcChannel channel = GrpcChannel.ForAddress(tServer.Value);
                 channels.Add(tServer.Key, channel);
                 tServerInstances.Add(tServer.Key, new TServerLServerService.TServerLServerServiceClient(channel));
@@ -111,11 +109,10 @@ namespace LServer.Services
                         leaseQueue.Add(lease);
                 }
             }
-            Console.WriteLine("New LeaseRequest: " + request.Key + request.TManagerId);
+            //Console.WriteLine("New LeaseRequest: " + request.Key + request.TManagerId);
 
             // Replies with an ack 
             AskLeaseReply leaseReply = new AskLeaseReply { Ack = true };
-            Console.WriteLine("Response sent: " + leaseReply.Ack);
 
             return leaseReply;
         }
@@ -138,7 +135,7 @@ namespace LServer.Services
             List<SendLeasesReply> leaseReplies = new List<SendLeasesReply>();
             List<Task> taskList = new List<Task>();
 
-            Console.WriteLine("Lease request has :" + leaseRequest.Leases.Count + " leases.");
+            Console.WriteLine("\nLease request has :" + leaseRequest.Leases.Count + " leases.");
 
             // Sends the list to every TManager
             foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> tServerInstance in this.tServerInstances)
@@ -150,7 +147,7 @@ namespace LServer.Services
                         SendLeasesReply leaseReply = tServerInstance.Value.SendLeases(leaseRequest);
                         leaseReplies.Add(leaseReply);
                     }
-                    catch (RpcException ex)
+                    catch (RpcException)
                     {
                         //Console.WriteLine("Something whent wrong in a broadcast lease reply..." + ex.Status);
                     }
@@ -169,8 +166,6 @@ namespace LServer.Services
                 broadcastLeaseQueue.Clear(); 
             }
 
-            // TODO - for now it returns the first response received
-            // verify if received, else the values will be lost
             return leaseReplies.First().Ack;
         }
 
@@ -184,12 +179,15 @@ namespace LServer.Services
              |______|_____/ \___|_|    \_/ \___|_|  |___/    
         */
 
-        public PromiseReply PaxosPrepare(PrepareRequest request)
+        public PromiseReply? PaxosPrepare(PrepareRequest request)
         {
+            // Verify if it should or not respond to the server
+            // Only responds based on what the config file says
+            
             Console.WriteLine("Entered Paxos Prepare! (Step 1)");
-            
-            PromiseReply reply = new PromiseReply { Epoch = -1};
-            
+
+            PromiseReply reply = new PromiseReply { Epoch = -1 };
+
             // In case a leader receives a prepare request, compare the serverId and roundId, and if the serverId is higher,
             // accept the new leader and abort the prepare phase
             if (this.isLeader && request.ProposerId < this.serverId)
@@ -210,20 +208,24 @@ namespace LServer.Services
             }
             else
                 Console.WriteLine("Oops, roundID too low in prepare phase.");
-            
+
             if (request.ProposerId == this.leaderId)
             {
                 this.isLeaderDead = false;
             }
 
-            return reply;
+            if (!isSuspectedBy.Contains(request.ProposerId))
+                return reply;
+            
+            Console.WriteLine("DID not respond!! (PREPARE)\n");
+            return null;
         }
 
-        public AcceptedReply PaxosAccept(AcceptRequest request) 
-        {
+        public AcceptedReply? PaxosAccept(AcceptRequest request) 
+        {            
             Console.WriteLine("Entered Paxos Accept! (Step 2)");
 
-            AcceptedReply reply = new AcceptedReply {  Epoch = -1 };
+            AcceptedReply reply = new AcceptedReply { Epoch = -1 };
 
             if (request.RoundId >= this.highestRoundId)
             {
@@ -239,12 +241,16 @@ namespace LServer.Services
                 }
             }
             else
-                Console.WriteLine("Oops, roundID too low in accept phase.");
+                Console.WriteLine("\nOops, roundID too low in accept phase.");
 
             // verify if not the leader can do an accept without prepare phase
-            this.isLeaderDead = false;            
+            this.isLeaderDead = false;
 
-            return reply;
+            if (!isSuspectedBy.Contains(request.ProposerId))
+                return reply;
+            
+            Console.WriteLine("DID not respond!! (ACCEPT)\n");
+            return null;
         }
 
         /*
@@ -280,7 +286,7 @@ namespace LServer.Services
 
             lock (broadcastLeaseQueue)
             {
-                Console.WriteLine("Leases in broadcast: " + broadcastLeaseQueue.Count);
+                Console.WriteLine("\nLeases in broadcast: " + broadcastLeaseQueue.Count);
             }
 
             // Get the suspect lServers from the processStates and add them to the list
@@ -348,7 +354,7 @@ namespace LServer.Services
 
                     // Didn't succeed in the prepare phase due to not enough promise/accept replies, backoff time and repeats
                     case 0:
-                        Console.WriteLine("Didn't succeed in the prepare/accept phase due to not enough promise/accept replies.");
+                        Console.WriteLine("\nDidn't succeed in the prepare/accept phase due to not enough promise/accept replies.");
                         Thread.Sleep(this.backoffTime + (this.serverId * 10));
                         this.backoffTime *= 2;
                         Consensus(epoch);
@@ -356,7 +362,7 @@ namespace LServer.Services
 
                     // Another server is leader, aborted the prepare phase
                     case -1:
-                        Console.WriteLine("Another server wants to be leader, aborted the prepare phase.");
+                        Console.WriteLine("\nAnother server wants to be leader, aborted the prepare phase.");
                         this.backoffTime = 100;
                         break;
                 }
@@ -364,16 +370,14 @@ namespace LServer.Services
 
             // awaits for the leader to make a prepareRequest, and sends a promiseReply
             else
-            {
-                //ConsensusAcceptor(currentLeaderId);
-                
+            {                
                 // Waits for some prepare/accept
                 // if doesn't receive any from the leader in the beginning of the epoch
                 Thread.Sleep(this.epochDuration / 2);
                 // if leader is dead, add to the suspected list
                 if (this.isLeaderDead)
                 {
-                    Console.WriteLine("Server Leader is possibly dead :(");
+                    Console.WriteLine("\nServer Leader is possibly dead :(");
                     if (!this.suspects.Contains(this.leaderId))
                     {
                         this.suspects.Add(this.leaderId);
@@ -382,14 +386,14 @@ namespace LServer.Services
                 }
                 else
                 {
-                    Console.WriteLine("Everything is fine, Leader is alive and responsive!");
-                    Console.WriteLine("Acceptor will now broadcastLeases");
+                    Console.WriteLine("\nEverything is fine, Leader is alive and responsive!");
+                    Console.WriteLine("\nAcceptor will now broadcastLeases");
                     BroadcastLeases();
                 }
 
                 this.backoffTime = 100;
             }
-            Console.WriteLine("End of Consensus Epoch");
+            Console.WriteLine("\nEnd of Consensus Epoch");
         }
 
         public int ConsensusLeader(int currentLeaderId, int epoch) 
@@ -409,20 +413,23 @@ namespace LServer.Services
 
                 foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
                 {
-                    Task t = Task.Run(() =>
+                    if (!isSuspectedBy.Contains(Int32.Parse(lServerInstances.Key.Substring(lServerInstances.Key.Length - 1))))
                     {
-                        try
+                        Task t = Task.Run(() =>
                         {
-                            PromiseReply promiseReply = lServerInstances.Value.Prepare(prepareRequest);
-                            promiseReplies.Add(promiseReply);
-                        }
-                        catch (RpcException ex)
-                        {
-                            //Console.WriteLine("Something whent wrong in a promise reply..." + ex.Status);
-                        }
-                        return Task.CompletedTask;
-                    });
-                    pTasks.Add(t);
+                            try
+                            {
+                                PromiseReply promiseReply = lServerInstances.Value.Prepare(prepareRequest);
+                                promiseReplies.Add(promiseReply);
+                            }
+                            catch (RpcException)
+                            {
+                                //Console.WriteLine("\nSomething whent wrong in a promise reply...");
+                            }
+                            return Task.CompletedTask;
+                        });
+                        pTasks.Add(t);
+                    }
                 }
 
                 // waits some time for responses
@@ -431,7 +438,7 @@ namespace LServer.Services
                 // If the promise replies are not the majority, the prepare phase has failed
                 if (promiseReplies.Count < (this.lServersId.Count / 2) )
                 {
-                    Console.WriteLine("Leader Failed in promise replies...: " + promiseReplies.Count);
+                    Console.WriteLine("\nLeader Failed in promise replies...: " + promiseReplies.Count);
                     this.isLeader = false;
                     return 0;
                 }
@@ -447,10 +454,10 @@ namespace LServer.Services
                 }
 
                 this.highestRoundId = currentRoundId;
-                Console.WriteLine("I am the leader: " + serverId + ", and ran the prepare phase.");
+                Console.WriteLine("\nI am the leader: " + serverId + ", and ran the prepare phase.");
 
                 // Verify and update the Queue of leases in case of missing leases
-                Console.WriteLine("Comparing lease queues.");
+                Console.WriteLine("\nComparing lease queues.");
                 foreach (PromiseReply promiseReply in promiseReplies)
                 {
                     CompareLeaseQueue(promiseReply.Queue.ToList());
@@ -479,24 +486,27 @@ namespace LServer.Services
                 }
             }
 
-            AcceptRequest acceptRequest = new AcceptRequest { Epoch = epoch, RoundId = this.highestRoundId , Queue = { broadcastLeaseQueue } };
+            AcceptRequest acceptRequest = new AcceptRequest { Epoch = epoch, RoundId = this.highestRoundId , Queue = { broadcastLeaseQueue } , ProposerId = serverId };
 
             foreach (KeyValuePair<string, PaxosService.PaxosServiceClient> lServerInstances in this.lServerInstances)
             {
-                Task t = Task.Run(() =>
+                if (!isSuspectedBy.Contains(Int32.Parse(lServerInstances.Key.Substring(lServerInstances.Key.Length - 1))))
                 {
-                    try
+                    Task t = Task.Run(() =>
                     {
-                        AcceptedReply acceptedReply = lServerInstances.Value.Accept(acceptRequest);
-                        acceptedReplies.Add(acceptedReply);
-                    }
-                    catch (RpcException ex)
-                    {
-                        //Console.WriteLine("Something whent wrong in a accept reply..." + ex.Status);
-                    }
-                    return Task.CompletedTask;
-                });
-                aTasks.Add(t);
+                        try
+                        {
+                            AcceptedReply acceptedReply = lServerInstances.Value.Accept(acceptRequest);
+                            acceptedReplies.Add(acceptedReply);
+                        }
+                        catch (RpcException)
+                        {
+                            //Console.WriteLine("Something whent wrong in a accept reply..." + ex.Status);
+                        }
+                        return Task.CompletedTask;
+                    });
+                    aTasks.Add(t);
+                }
             }
 
             // waits some time for responses
@@ -505,7 +515,7 @@ namespace LServer.Services
             // If the accepted replies are not the majority, the accept phase has failed
             if (acceptedReplies.Count < (this.lServersId.Count / 2) )
             {
-                Console.WriteLine("Leader Failed in accept replies...: " + acceptedReplies.Count);
+                Console.WriteLine("\nLeader Failed in accept replies...: " + acceptedReplies.Count);
                 this.isLeader = false;
                 return 0;
             }
@@ -519,7 +529,7 @@ namespace LServer.Services
                 }
             }
 
-            Console.WriteLine("Here is the consensual queue: ");
+            Console.WriteLine("\nHere is the consensual queue: ");
             foreach (var lease in acceptRequest.Queue)
             {
                 Console.Write(lease.TManagerId + lease.Key + "\n");
@@ -548,7 +558,7 @@ namespace LServer.Services
         public LStatusReply State(LStatusRequest request)
         {
             // Print who this server is and who the leader is
-            Console.WriteLine("I am server " + this.serverId + " and the leader is " + this.leaderId);
+            Console.WriteLine("\nI am server " + this.serverId + " and the leader is " + this.leaderId);
 
             LStatusReply reply = new LStatusReply { Status = true };
 

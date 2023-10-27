@@ -55,199 +55,118 @@ class Program
         string scriptPath = solutionDir + "\\Client\\Scripts\\" + script + ".txt";
         Console.WriteLine("Script path: " + scriptPath);
 
-
-        // Read and parse the client script
-        string[] lines = File.ReadAllLines(scriptPath);
-
-        foreach (string line in lines)
-        {
-            string[] strings = line.Split(" ", StringSplitOptions.RemoveEmptyEntries);
-
-            if (strings.Length == 0) { continue; }
-
-            switch (strings[0])
-            {
-                // Transaction command, will have a list of DadInts to read and to write (may be empty)
-                // Has the following format:
-                // T ("a-key-name","another-key-name") (<"name1",10>,<"name2",20>) 
-                case "T":
-                    // String list with three elements: command, list of reads and list of writes
-                    string[] operations = Regex.Split(line, @"\s+");
-
-                    if (operations == null || operations?.Length != 3) 
-                    { 
-                        Console.WriteLine("Invalid number of arguments.");
-                        break;
-                    }
-
-                    // List of dadInts to read and to write
-                    List<string> reads = new List<string>();
-                    List<DadInt> writes = new List<DadInt>();
-
-                    string readPattern = @"""(.*?)""";
-                    string writePattern = @"<""([0-9a-zA-Z-:_]*?)\"",(\d+)>";
-
-                    Regex readRegex = new Regex(readPattern);
-                    Regex writeRegex = new Regex(writePattern);
-
-                    // Iterate through matches and add them to write and read list
-                    foreach (Match match in readRegex.Matches(operations[1]))
-                    {
-                        // Groups[1] is the string between the quotes
-                        reads.Add(match.Groups[1].Value);
-                    }
-                    foreach (Match match in writeRegex.Matches(operations[2]))
-                    {
-                        DadInt dadInt = new DadInt();
-                        // Group[1] holds the key, Group[2] holds the value
-                        dadInt.Key = match.Groups[1].Value;
-                        if (Int32.TryParse(match.Groups[2].Value, out int intValue)) { dadInt.Val = intValue; }
-                        writes.Add(dadInt);
-                    }
-                    RepeatedField<DadInt> txReply = client.TxSubmit(reads, writes).Result;
-
-                    if (txReply == null) { break; }
-
-                    if (txReply.Count == 0)
-                    {
-                        Console.WriteLine("Transaction with no reads available.");
-                        break;
-                    }
-
-                    foreach (DadInt reply in txReply)
-                    {
-                        // When the transaction is not completed, a DadInt with key == abort is returned
-                        if (reply.Key == "abort")
-                        {
-                            Console.WriteLine("Something went wrong during the transaction.. Please repeat again.");
-                            break;
-                        } 
-                        Console.WriteLine($"DadInt with Id: {reply.Key}");
-                        Console.WriteLine($"Has Value: {reply.Val}");
-                    }
-                    break;
-
-                // Wait command
-                case "W":
-                    if (strings.Length != 2)
-                    {
-                        Console.WriteLine("Invalid number of arguments.");
-                        break;
-                    }
-                    if (!int.TryParse(strings[1], out int waitTime) || waitTime < 0)
-                    {
-                        Console.WriteLine("Invalid argument (must be a positive integer).");
-                        break;
-                    }
-                    Console.WriteLine("Waiting for " + waitTime + " milliseconds.");
-                    Thread.Sleep(waitTime);
-                    Console.WriteLine("Finished waiting"); 
-                    break;
-
-                // Status command
-                case "S":
-                    if (strings.Length != 1) { 
-                        Console.WriteLine("Invalid number of arguments.");
-                        break;
-                    }
-
-                    bool statReply = client.Status().Result;
-                    Console.WriteLine("Sent a status request to all servers.");
-                    break;
-
-                // Ignore comments
-                case "#":
-                    break;
-
-                default:
-                    Console.WriteLine("Command '" + strings[0] + "' is invalid.");
-                    break;
-            }
-        }
-        // FOR TESTING PURPOSES, ACCEPTING INPUT FROM THE CONSOLE
-        Console.WriteLine("Now accepting input from user...");
         while (true)
         {
-            // Parsing according to the config files
-            // First char will be the command to be executed!
 
-            switch (Console.ReadKey().KeyChar)
+
+            // Read and parse the client script
+            string[] lines = File.ReadAllLines(scriptPath);
+
+            foreach (string line in lines)
             {
-                // Transaction command, will have a list of DadInts to read and to write (may be empty)
-                // has the following format:
-                // T ("a-key-name","another-key-name") (<"name1",10>,<"name2",20>) 
-                case 'T': case 't':
-                    string readCommand = Console.ReadLine();
-                    // string with two elements, list of reads and list of writes
-                    string[] operations = Regex.Split(readCommand, @"\s+");
+                string[] strings = line.Split(" ", StringSplitOptions.RemoveEmptyEntries);
 
-                    if (operations == null || operations?.Length != 3)
-                    {
-                        Console.WriteLine("Invalid number of arguments.");
-                        break;
-                    }
+                if (strings.Length == 0) { continue; }
 
-                    // List of dadInts to read and to write
-                    List<string> reads = new List<string>();
-                    List<DadInt> writes = new List<DadInt>();
+                switch (strings[0])
+                {
+                    // Transaction command, will have a list of DadInts to read and to write (may be empty)
+                    // Has the following format:
+                    // T ("a-key-name","another-key-name") (<"name1",10>,<"name2",20>) 
+                    case "T":
+                        // String list with three elements: command, list of reads and list of writes
+                        string[] operations = Regex.Split(line, @"\s+");
 
-                    string readPattern = @"""(.*?)""";
-                    string writePattern = @"<""([0-9a-zA-Z-:_]*?)\"",(\d+)>";
-
-                    Regex readRegex = new Regex(readPattern);
-                    Regex writeRegex = new Regex(writePattern);
-
-                    // Iterate through matches and add them to write and read list
-                    foreach (Match match in readRegex.Matches(operations[1]))
-                    {
-                        //Groups[1] is the string between the quotes
-                        reads.Add(match.Groups[1].Value);
-                    }
-                    foreach (Match match in writeRegex.Matches(operations[2]))
-                    {
-                        DadInt dadInt = new DadInt();
-                        // Group[1] holds the key, Group[2] holds the value
-                        dadInt.Key = match.Groups[1].Value;
-                        if (Int32.TryParse(match.Groups[2].Value, out int intValue)) { dadInt.Val = intValue; }
-                        writes.Add(dadInt);
-                    }
-                    //Console.WriteLine("Reads: " + reads.Count + "\nWrites: " + writes.Count);
-                    //Console.WriteLine(reads[0] + "\n" + reads[1]);
-                    //Console.WriteLine(writes[0].Key + "\n" + writes[1].Key);
-                    RepeatedField<DadInt> txReply = client.TxSubmit(reads, writes).Result;
-
-                    if (txReply == null) { break; }
-
-                    if (txReply.Count == 0) 
-                    { 
-                        Console.WriteLine("Transaction with no reads available."); 
-                        break;
-                    }
-
-                    foreach (DadInt reply in txReply)
-                    {
-                        // when the transaction is not realised, a DadInt with key == abort is returned
-                        if (reply.Key == "abort")
+                        if (operations == null || operations?.Length != 3)
                         {
-                            Console.WriteLine("Something went wrong during the transaction.. Please repeat again.");
+                            Console.WriteLine("Invalid number of arguments.");
                             break;
                         }
-                        Console.WriteLine($"DadInt with Id: {reply.Key}");
-                        Console.WriteLine($"Has Value: {reply.Val}");
-                    }
 
-                    break;
+                        // List of dadInts to read and to write
+                        List<string> reads = new List<string>();
+                        List<DadInt> writes = new List<DadInt>();
 
-                // Status command
-                // TODO, not sure what the key for this command is, not specified
-                case 'S': case 's':
-                    Console.WriteLine();
-                    bool statReply = client.Status().Result;
-                    Console.WriteLine("server responded with: " + statReply);
-                    break;
-                default:
-                    Console.WriteLine("no command found :(");
-                    break;
+                        string readPattern = @"""(.*?)""";
+                        string writePattern = @"<""([0-9a-zA-Z-:_]*?)\"",(\d+)>";
+
+                        Regex readRegex = new Regex(readPattern);
+                        Regex writeRegex = new Regex(writePattern);
+
+                        // Iterate through matches and add them to write and read list
+                        foreach (Match match in readRegex.Matches(operations[1]))
+                        {
+                            // Groups[1] is the string between the quotes
+                            reads.Add(match.Groups[1].Value);
+                        }
+                        foreach (Match match in writeRegex.Matches(operations[2]))
+                        {
+                            DadInt dadInt = new DadInt();
+                            // Group[1] holds the key, Group[2] holds the value
+                            dadInt.Key = match.Groups[1].Value;
+                            if (Int32.TryParse(match.Groups[2].Value, out int intValue)) { dadInt.Val = intValue; }
+                            writes.Add(dadInt);
+                        }
+                        RepeatedField<DadInt> txReply = client.TxSubmit(reads, writes).Result;
+
+                        if (txReply == null) { break; }
+
+                        if (txReply.Count == 0)
+                        {
+                            Console.WriteLine("Transaction with no reads available.");
+                            break;
+                        }
+
+                        foreach (DadInt reply in txReply)
+                        {
+                            // When the transaction is not completed, a DadInt with key == abort is returned
+                            if (reply.Key == "abort")
+                            {
+                                Console.WriteLine("Something went wrong during the transaction.. Please repeat again.");
+                                break;
+                            }
+                            Console.WriteLine($"DadInt with Id: {reply.Key}");
+                            Console.WriteLine($"Has Value: {reply.Val}");
+                        }
+                        break;
+
+                    // Wait command
+                    case "W":
+                        if (strings.Length != 2)
+                        {
+                            Console.WriteLine("Invalid number of arguments.");
+                            break;
+                        }
+                        if (!int.TryParse(strings[1], out int waitTime) || waitTime < 0)
+                        {
+                            Console.WriteLine("Invalid argument (must be a positive integer).");
+                            break;
+                        }
+                        Console.WriteLine("Waiting for " + waitTime + " milliseconds.");
+                        Thread.Sleep(waitTime);
+                        Console.WriteLine("Finished waiting");
+                        break;
+
+                    // Status command
+                    case "S":
+                        if (strings.Length != 1)
+                        {
+                            Console.WriteLine("Invalid number of arguments.");
+                            break;
+                        }
+
+                        bool statReply = client.Status().Result;
+                        Console.WriteLine("Sent a status request to all servers.");
+                        break;
+
+                    // Ignore comments
+                    case "#":
+                        break;
+
+                    default:
+                        Console.WriteLine("Command '" + strings[0] + "' is invalid.");
+                        break;
+                }
             }
         }
     }

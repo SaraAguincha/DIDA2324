@@ -1,10 +1,6 @@
-﻿using Google.Protobuf.WellKnownTypes;
-using Grpc.Core;
-using Grpc.Net.Client;
+﻿using Grpc.Core;
 using LServer.Services;
 using Protos;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using Utilities;
 
 // Lease Server
@@ -18,16 +14,16 @@ class Program
     static void NextEpoch(object state)
     {
         epoch++;
-        Console.WriteLine("Advanced to epoch number " + epoch.ToString());
+        Console.WriteLine("\nAdvanced to epoch number " + epoch.ToString());
         LServerService lServerService = (LServerService)state;
         lServerService.Consensus(epoch);
     }
-    public static async Task Main(string[] args)
+    public static Task Main(string[] args)
     {
         // Sleep until the specified time on args[3]
         TimeSpan waitToStart = DateTime.Parse(args[3]).Subtract(DateTime.Now);
         Console.WriteLine("Waiting for " + waitToStart.TotalMilliseconds + " milliseconds.");
-        System.Threading.Thread.Sleep(waitToStart);
+        Thread.Sleep(waitToStart);
 
         // Server configuration
         string processId = args[0];
