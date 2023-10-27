@@ -15,7 +15,7 @@ namespace Client.Services
     {
         private string clientId;
         private string currentServerId;
-        private List<string> unavailableServers = new List<string>();
+        private Dictionary<string, ClientTServerService.ClientTServerServiceClient> availableTServers;
         private Dictionary<string, ClientTServerService.ClientTServerServiceClient> tServers;
         private Dictionary<string, ClientLServerService.ClientLServerServiceClient> lServers;
         private ClientTServerService.ClientTServerServiceClient server;
@@ -25,20 +25,16 @@ namespace Client.Services
         {
             this.clientId = ClientId;
             this.tServers = TServers;
+            this.availableTServers = TServers;
             this.lServers = LServers;
 
-            // Initialy pick a random TServer to send the request (DEFAULT)
+            // Initialy pick a random TServer to send the request
             Random random = new Random();
             int index = random.Next(TServers.Count);
             this.server = TServers.ElementAt(index).Value;
             this.currentServerId = TServers.ElementAt(index).Key;
 
             Console.WriteLine("Client " + clientId + " connected to TServer " + currentServerId);
-
-            // (FOR TESTING PURPOSES) THIS PICKS THE FIRST TSERVER, UNCOMMENT/COMMENT THE ABOVE LINES AND THIS ONE TO CHANGE THIS
-            //this.server = TServers.ElementAt(0).Value;
-            //Console.WriteLine("Client " + clientId + " connected to TServer " + TServers.ElementAt(0).Key);
-
         }
 
         // Asynchronous TxSubmit call
@@ -54,18 +50,21 @@ namespace Client.Services
             }
             catch (RpcException)
             {
-                unavailableServers.Add(currentServerId);
-                Console.WriteLine("TxSubmit Error: The current " + currentServerId + " is unavailable");
-                
-                foreach (string tMServer in  tServers.Keys)
+                // If the current server is unavailable, remove it from the available servers and randomly pick a new one
+                this.availableTServers.Remove(currentServerId);
+                Console.WriteLine("TxSubmit Error: The current server " + currentServerId + " is unavailable.");
+
+                if (availableTServers.Count == 0)
                 {
-                    if (!unavailableServers.Contains(tMServer))
-                    {
-                        this.server = tServers[tMServer];
-                        this.currentServerId = tMServer;
-                        Console.WriteLine("New connection made to: " + tMServer + ". \nPlease retry again now.");
-                        break;
-                    }
+                    Console.WriteLine("TxSubmit Error: No available servers.");
+                }
+                else
+                {
+                    Random random = new Random();
+                    int index = random.Next(availableTServers.Count);
+                    this.server = availableTServers.ElementAt(index).Value;
+                    this.currentServerId = availableTServers.ElementAt(index).Key;
+                    Console.WriteLine("New connection made to: " + this.currentServerId + ".");
                 }
 
                 return null;
@@ -86,8 +85,7 @@ namespace Client.Services
                 catch (RpcException)
                 {
                     Console.WriteLine("Server " + tServer.Key + " is unavailable.");
-                    unavailableServers.Add(tServer.Key);
-                    return false;
+                    this.availableTServers.Remove(tServer.Key);
                 }
             }
 
@@ -101,7 +99,6 @@ namespace Client.Services
                 catch (RpcException)
                 {
                     Console.WriteLine("Server " + lServer.Key + " is unavailable.");
-                    return false;
                 }
             }
 

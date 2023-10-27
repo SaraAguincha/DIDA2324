@@ -152,9 +152,7 @@ class Program
                     }
 
                     bool statReply = client.Status().Result;
-                    
-                    if (statReply) { Console.WriteLine("Sent a status request to all servers."); }
-                    else { Console.WriteLine("Could not send a status request to all servers."); }
+                    Console.WriteLine("Sent a status request to all servers.");
                     break;
 
                 // Ignore comments

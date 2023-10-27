@@ -610,7 +610,7 @@ namespace TServer.Services
         public TStatusReply State(TStatusRequest request)
         {
             //Print the server id and the status
-            //Console.WriteLine("I am server " + this.tManagerId + " and I am alive!");
+            Console.WriteLine("I am server " + this.tManagerId + " and I am alive!");
 
             TStatusReply reply = new TStatusReply { Status = true };
 
