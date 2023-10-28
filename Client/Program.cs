@@ -2,6 +2,7 @@
 using Google.Protobuf.Collections;
 using Grpc.Net.Client;
 using Protos;
+using System.Text;
 using System.Text.RegularExpressions;
 using Utilities;
 
@@ -58,7 +59,10 @@ class Program
         string fileName = "dataClient" + processId + ".txt";
         string dataPath = solutionDir + "\\Client\\Scripts\\" + fileName;
 
-        File.Create(dataPath);
+        if (File.Exists(dataPath))
+        {
+            File.Delete(dataPath);
+        }
 
         while (true)
         {
@@ -121,14 +125,12 @@ class Program
 
                         if (txReply.Count == 0)
                         {
-                            // Gets Timespan and adds to the file
-                            //File.AppendAllText(dataPath, txStartTime.Subtract(DateTime.Now) + Environment.NewLine);
-                            /*using (StreamWriter writer = new StreamWriter(dataPath, true))
+                            // Add the Timespan to the file
+                            using (FileStream fs = File.Create(dataPath))
                             {
-                                writer.WriteLine(DateTime.Now.Subtract(txStartTime));
-                            }*/
-
-                            Console.WriteLine("TIMESPAN: " + DateTime.Now.Subtract(txStartTime).ToString());
+                                Byte[] info = new UTF8Encoding(true).GetBytes(DateTime.Now.Subtract(txStartTime).ToString());
+                                fs.Write(info, 0, info.Length);
+                            }
 
                             Console.WriteLine("Transaction with no reads available.");
                             break;
@@ -139,13 +141,12 @@ class Program
                             // When the transaction is not completed, a DadInt with key == abort is returned
                             if (reply.Key == "abort")
                             {
-                                // Gets Timespan and adds to the file ((with -1 cause aborted))
-                                //File.AppendAllText(dataPath, -1 + Environment.NewLine);
-                                /*using (StreamWriter writer = new StreamWriter(dataPath, true))
+                                // Add the Timespan to the file
+                                using (FileStream fs = File.Create(dataPath))
                                 {
-                                    writer.WriteLine(-1);
-                                }*/
-                                Console.WriteLine("TIMESPAN: " + -1);
+                                    Byte[] info = new UTF8Encoding(true).GetBytes("-1");
+                                    fs.Write(info, 0, info.Length);
+                                }
 
                                 Console.WriteLine("Something went wrong during the transaction.. Please repeat again.");
                                 break;
@@ -153,13 +154,12 @@ class Program
                             Console.WriteLine($"DadInt with Id: {reply.Key}");
                             Console.WriteLine($"Has Value: {reply.Val}");
                         }
-                        // Gets Timespan and adds to the file
-                        //File.AppendAllText(dataPath, txStartTime.Subtract(DateTime.Now) + Environment.NewLine);
-                        /*using (StreamWriter writer = new StreamWriter(dataPath, true))
+                        // Add the Timespan to the file
+                        using (FileStream fs = File.Create(dataPath))
                         {
-                            writer.WriteLine(DateTime.Now.Subtract(txStartTime));
-                        }*/
-                        Console.WriteLine("TIMESPAN: " + DateTime.Now.Subtract(txStartTime).ToString());
+                            Byte[] info = new UTF8Encoding(true).GetBytes(DateTime.Now.Subtract(txStartTime).ToString());
+                            fs.Write(info, 0, info.Length);
+                        }
 
                         break;
 
