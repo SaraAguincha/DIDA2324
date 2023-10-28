@@ -97,28 +97,6 @@ namespace TServer.Services
         // Execute at the beginning of each epoch
         public void slotBeginning(int epoch)
         {
-            lock (this)
-            {
-                // DEBUG
-                /*Console.WriteLine("Attributed Accesses:");
-                foreach (var item in attributedAccesses)
-                {
-                    Console.Write($"Key: {item.Key} Queue Peek: {item.Value[0]} Queue Size: {item.Value.Count}\n");
-                }
-                Console.WriteLine("Key Access:");
-                foreach(var item in keyAccess)
-                {
-                    Console.WriteLine($"Key: {item.Key} Manager: {item.Value}");
-                }*/
-                /*Console.WriteLine("Dad Ints:");
-                foreach (var dadInt in this.dadInts)
-                {
-                    Console.WriteLine($"Key: {dadInt.Value.Key} Value: {dadInt.Value.Val}\n");
-                }*/
-                // END OF DEBUG
-            }
-
-
             // Kill the process if it's crashed in the process state for this epoch
             if (processStates[epoch - 1] != null)
             {
@@ -149,12 +127,6 @@ namespace TServer.Services
                         }
                     }
                 }
-            }
-
-            Console.WriteLine("Available tservers:");
-            foreach (KeyValuePair<string, string> tserver in this.tServers)
-            {
-                Console.Write(tserver.Key + " ");
             }
         }
 
@@ -188,15 +160,20 @@ namespace TServer.Services
             // requests a lease from all of the LServers
             List<Task<AskLeaseReply>> askLeaseReplies = new List<Task<AskLeaseReply>>();
             // for each LServer starts a task with a request
-            foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> lServerInstance in this.lServerInstances)
+            try
             {
-                // for each entry in LServers, makes a request for a lease
-                AsyncUnaryCall<AskLeaseReply> leaseReply = lServerInstance.Value.AskLeaseAsync(askLeaseRequest);
-                askLeaseReplies.Add(leaseReply.ResponseAsync);
+                foreach (KeyValuePair<string, TServerLServerService.TServerLServerServiceClient> lServerInstance in this.lServerInstances)
+                {
+                    // for each entry in LServers, makes a request for a lease
+                    AsyncUnaryCall<AskLeaseReply> leaseReply = lServerInstance.Value.AskLeaseAsync(askLeaseRequest);
+                    askLeaseReplies.Add(leaseReply.ResponseAsync);
+                }
+                Task.WaitAll(askLeaseReplies.ToArray(), this.epochDuration / 20);
             }
-            Task.WaitAll(askLeaseReplies.ToArray(), this.epochDuration / 20);
-
-
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Exception in Transaction of Client: {request.ClientId} and ID: {this.tManagerId}\nException: {ex}");
+            }
             int numberLeasesNeeded = reads.Count + writes.Count;
 
             // List of dadInts to use as reply (read request by the client)
@@ -273,8 +250,8 @@ namespace TServer.Services
                                 continue;
 
                             // Number of positive acks
-                            int quorum = 0;
-                            List<Task<AskReleaseReply>> taskList = new List<Task<AskReleaseReply>>();
+                            int askReleaseQuorum = 0;
+                            List<Task<AskReleaseReply>> askReleaseList = new List<Task<AskReleaseReply>>();
                             // Ask all other TManagers if it makes sense to release the suspicious lease
                             AskReleaseRequest askReleaseRequest = new AskReleaseRequest
                             {
@@ -288,22 +265,22 @@ namespace TServer.Services
                                 foreach (var tServer in this.tServerInstances)
                                 {
                                     var askReleaseReply = tServer.Value.AskReleaseAsync(askReleaseRequest);
-                                    taskList.Add(askReleaseReply.ResponseAsync);
+                                    askReleaseList.Add(askReleaseReply.ResponseAsync);
                                 }
-                                Task.WaitAll(taskList.ToArray(), this.epochDuration / 10);
+                                Task.WaitAll(askReleaseList.ToArray(), this.epochDuration / 10);
                             }
                             catch (Exception ex) 
                             {
-                                Console.WriteLine("Exception at transaction:" + ex.ToString()); 
+                                Console.WriteLine($"Exception in Transaction of Client: {request.ClientId} and ID: {this.tManagerId}\nException: {ex}");
                             }
-
+                            Dictionary<int, int> dadIntMajority = new Dictionary<int, int>();
                             // Check if the responses where majorly positive
-                            foreach (var task in taskList)
+                            foreach (var task in askReleaseList)
                             {
                                 if (task.IsCompletedSuccessfully && task.Result.Ack)
-                                    quorum++;
+                                    askReleaseQuorum++;
                             }
-                            if (quorum >= majority)
+                            if (askReleaseQuorum >= majority)
                             {
                                 keyAccess[leaseKey] = this.tManagerId;
                                 this.keyAccessKeep[leaseKey] = 0;
@@ -313,36 +290,58 @@ namespace TServer.Services
                 }
             } // End of critical section
 
-            // Data Persistency service. After Transaction is Concluded, send the changed values to the other TMs
-            // TODO - If majority doesnt accept, abort transaction
-
             // If majority accepted, send data
+            List<Task<UpdateDataReply>> updateDataList = new List<Task<UpdateDataReply>>();
             try
             {
                 foreach (var tServer in this.tServerInstances)
                 {
-                    tServer.Value.UpdateDataAsync(new UpdateDataRequest { DadInts = {writes} });
+                    var updateDataReply = tServer.Value.UpdateDataAsync(new UpdateDataRequest { DadInts = {writes}, TManagerId = this.tManagerId });
+                    updateDataList.Add(updateDataReply.ResponseAsync);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Exception at transaction, update Data:" + ex.ToString());
+                Console.WriteLine($"Exception in Transaction of Client: {request.ClientId} and ID: {this.tManagerId}\nException: {ex}");
+            }
+
+            Task.WaitAll(updateDataList.ToArray(), this.epochDuration / 10);
+
+            int updateDataQuorum = 0;
+
+            foreach (var task in updateDataList)
+            {
+                if (task.IsCompletedSuccessfully && task.Result.Ack)
+                    updateDataQuorum++;
             }
 
             // responds with the DadInts the client wants to read
             // If they do not exist, returns an empty list
-            TxSubmitReply reply = new TxSubmitReply { DadInts = { dadIntsToReply } };
+            TxSubmitReply reply;
 
-            Console.WriteLine($"\nCONCLUDED TRANSACTION\nCLIENT: {request.ClientId}\n");
+            if (updateDataQuorum >= majority)
+            {
+                reply = new TxSubmitReply { DadInts = { dadIntsToReply } };
 
-            // TODO - Propagate written values (don't only send values when the leases change)
+                Console.WriteLine($"\nCONCLUDED TRANSACTION\nCLIENT: {request.ClientId}\n");
+            }
+            else
+            {
+                reply = new TxSubmitReply
+                {
+                    DadInts =
+                    {
+                        new DadInt { Key = "abort" }
+                    }
+                };
+                Console.WriteLine($"\nABORTED TRANSACTION\nCLIENT: {request.ClientId}\n");
+            }
 
             return reply;
-            
         }
 
         // Function that broadcasts the release and releases locally if necessary
-        private bool BroadcastRelease(string key, int value, bool writtenValue) 
+        private bool? BroadcastRelease(string key, int value, bool writtenValue) 
         {
             try
             {
@@ -351,7 +350,7 @@ namespace TServer.Services
                 {
                     if (this.keyAccess[key] != this.tManagerId)
                     {
-                        Console.WriteLine($"WARNING - Queue peek is wrong for: {key} and ID: {this.tManagerId}");
+                        Console.WriteLine($"Queue peek is wrong for: {key} and ID: {this.tManagerId}");
                         return false;
                     }
                     // Only release lease if any other TManager is last in attributedAccesses
@@ -376,7 +375,6 @@ namespace TServer.Services
                         // This TM doesn't need this key anymore, who has access to it is not relevant
                         this.keyAccess[key] = "";
                         this.keyAccessKeep[key] = 0;
-                        Console.WriteLine($"\nRealesed Lease of Key: {key} and ID: {this.tManagerId}\n");
                     }
                 }
                 Task.WaitAll(releaseReplyList.ToArray(), this.epochDuration / 20);
@@ -395,15 +393,19 @@ namespace TServer.Services
             }
             catch (Exception e) 
             {
-                Console.WriteLine($"WARNING - Exception in Release Lease Reply of Key: {key} and ID: {this.tManagerId}\nException: {e}");
+                Console.WriteLine($"Exception in Release Lease Reply of Key: {key} and ID: {this.tManagerId}\nException: {e}");
                 return false; 
             }
         }
 
         // Function that releases the lease for a certain key, giving the lease to the next in queue
-        public ReleaseLeaseReply ReleaseLease(ReleaseLeaseRequest request)
+        public ReleaseLeaseReply? ReleaseLease(ReleaseLeaseRequest request)
         {
-
+            // Is suspected
+            if (!tServers.ContainsKey(request.TManagerId))
+            {
+                return null;
+            }
             // Start of critical section
             Monitor.Enter(this);
             try
@@ -424,8 +426,9 @@ namespace TServer.Services
                 }
                 return new ReleaseLeaseReply { Ack = true };    
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"Exception in ReleaseLease of Key: {request.Key} and ID: {this.tManagerId}\nException: {ex}");
                 return new ReleaseLeaseReply { Ack = false }; 
             }
             finally 
@@ -436,47 +439,43 @@ namespace TServer.Services
         }
 
         // Function evoked when some TManager suspect that a lease is being held by a crashed manager
-        public AskReleaseReply AskRelease(AskReleaseRequest request) 
+        public AskReleaseReply? AskRelease(AskReleaseRequest request) 
         {
-            // TODO - Think a bit about if this is a good idea
+            // Is suspected
+            if (!tServers.ContainsKey(request.From))
+            {
+                return null;
+            }
             if (attributedAccesses[request.Key].Contains(this.tManagerId))
                 Monitor.PulseAll(this);
-            return new AskReleaseReply { Ack = true };
-            /*lock (this)
-            {
-                Console.WriteLine($"\nASK RELEASE: From: {request.From} To: {request.To}\n");
-                // TManager is suspected anyways, reply with ack to the release
-                if (tServerInstances.ContainsKey(request.To))
-                {
-                    bool leaseWasReleased = false;
-                    bool managerIsAlive = false;
-
-                    if (this.attributedAccesses.ContainsKey(request.Key) && this.tServers.ContainsKey(request.To))
-                    {
-                        foreach (var release in releasesList)
-                        {
-                            if (release.TManagerId == request.To)
-                            {
-                                if (release.Key == request.Key)
-                                    leaseWasReleased = true;
-                                managerIsAlive = true;
-                            }
-                        }
-                        // Only nack if the lease was never seen to be release and the manager is alive (sent any release this epoch)
-                        if (!leaseWasReleased && managerIsAlive)
-                        {
-                            return new AskReleaseReply { Ack = false };
-                        }
-
-                    }
-                }
-                keyAccessKeep[request.Key] = 0;
-                if (attributedAccesses[request.Key].Contains(this.tManagerId))
-                    Monitor.PulseAll(this);
-                return new AskReleaseReply { Ack = true };
-            }*/
+            return new AskReleaseReply { Ack = true, Value = dadInts[request.Key].Val };
         }
-        
+
+        // Evoked when a TM as ended a transaction and received acks from majority
+        // TManagers propagated the written DadInts to the other TMs to have Data consistency
+        public UpdateDataReply? SendData(UpdateDataRequest request)
+        {
+            // Is suspected
+            if (!tServers.ContainsKey(request.TManagerId))
+            {
+                return null;
+            }
+            lock (this)
+            {
+                // Updates the DadInt sent by the other TM
+                foreach (DadInt dInt in request.DadInts)
+                {
+                    // Updates the value with the one that was sent
+                    if (dadInts.ContainsKey(dInt.Key))
+                        dadInts[dInt.Key] = dInt;
+                    else
+                        dadInts.Add(dInt.Key, new DadInt(dInt));
+                }
+            }
+            UpdateDataReply reply = new UpdateDataReply { Ack = true };
+            return reply;
+        }
+
         // Evoked at the start of every epoch, LManagers send to the TManagers the queue of leases to be used in this epoch
         public SendLeasesReply SendLeases(SendLeasesRequest request)
         { 
@@ -499,7 +498,6 @@ namespace TServer.Services
                 // Populate the keyAccess dictionary
                 if (request.Leases.Count > 0)
                 {
-                    Console.WriteLine($"Received the following number of leases: {request.Leases.Count}");
                     foreach (Lease lease in request.Leases)
                     {
                         // Populate attributedAccesses with the ones received from request
@@ -560,20 +558,13 @@ namespace TServer.Services
                         Monitor.PulseAll(this);
                     }
                 }
-                // Debug
                 releasesList = new List<ReleaseLeaseRequest>();
-                Console.WriteLine("Key Access:");
-                foreach (var item in keyAccess)
-                {
-                    Console.WriteLine($"Key: {item.Key} Manager: {item.Value} Keep: {keyAccessKeep[item.Key]}");
-                } 
-                // End of debug
 
                 return new SendLeasesReply { Ack = true };
             }
             catch (Exception ex) 
             {
-                Console.WriteLine($"Exception at send leases: {ex}");
+                Console.WriteLine($"Exception in Send Leases ID: {this.tManagerId}\nException: {ex}");
                 return new SendLeasesReply { Ack = false }; 
             }
             finally
@@ -583,28 +574,6 @@ namespace TServer.Services
                 Monitor.Exit(this);   
             }
         }
-
-        // Evoked when a TM as ended a transaction and received acks from majority
-        // TManagers propagated the written DadInts to the other TMs to have Data consistency
-        public UpdateDataReply SendData(UpdateDataRequest request)
-        {
-            lock (this)
-            {
-                // Updates the DadInt sent by the other TM
-                foreach (DadInt dInt in request.DadInts)
-                {
-                    // Updates the value with the one that was sent
-                    if (dadInts.ContainsKey(dInt.Key))
-                        dadInts[dInt.Key] = dInt;
-                    else
-                        dadInts.Add(dInt.Key, new DadInt(dInt));                    
-                }
-            }
-            UpdateDataReply reply = new UpdateDataReply { Ack = true };
-            return reply;
-        }
-
-
 
         // State function to reply to client tstatus requests
         public TStatusReply State(TStatusRequest request)
