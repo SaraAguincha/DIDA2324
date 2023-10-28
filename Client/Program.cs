@@ -119,7 +119,7 @@ class Program
                             if (Int32.TryParse(match.Groups[2].Value, out int intValue)) { dadInt.Val = intValue; }
                             writes.Add(dadInt);
                         }
-                        RepeatedField<DadInt> txReply = client.TxSubmit(reads, writes).Result;
+                        RepeatedField<DadInt>? txReply = client.TxSubmit(reads, writes).Result;
 
                         if (txReply == null) { break; }
 
