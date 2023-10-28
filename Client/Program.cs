@@ -55,6 +55,11 @@ class Program
         string scriptPath = solutionDir + "\\Client\\Scripts\\" + script + ".txt";
         Console.WriteLine("Script path: " + scriptPath);
 
+        string fileName = "dataClient" + processId + ".txt";
+        string dataPath = solutionDir + "\\Client\\Scripts\\" + fileName;
+
+        File.Create(dataPath);
+
         while (true)
         {
             // Read and parse the client script
@@ -72,6 +77,7 @@ class Program
                     // Has the following format:
                     // T ("a-key-name","another-key-name") (<"name1",10>,<"name2",20>) 
                     case "T":
+
                         // String list with three elements: command, list of reads and list of writes
                         string[] operations = Regex.Split(line, @"\s+");
 
@@ -80,6 +86,10 @@ class Program
                             Console.WriteLine("Invalid number of arguments.");
                             break;
                         }
+
+                        // time spent until the tx is completed
+                        DateTime txStartTime = DateTime.Now;
+
 
                         // List of dadInts to read and to write
                         List<string> reads = new List<string>();
@@ -111,6 +121,15 @@ class Program
 
                         if (txReply.Count == 0)
                         {
+                            // Gets Timespan and adds to the file
+                            //File.AppendAllText(dataPath, txStartTime.Subtract(DateTime.Now) + Environment.NewLine);
+                            /*using (StreamWriter writer = new StreamWriter(dataPath, true))
+                            {
+                                writer.WriteLine(DateTime.Now.Subtract(txStartTime));
+                            }*/
+
+                            Console.WriteLine("TIMESPAN: " + DateTime.Now.Subtract(txStartTime).ToString());
+
                             Console.WriteLine("Transaction with no reads available.");
                             break;
                         }
@@ -120,12 +139,28 @@ class Program
                             // When the transaction is not completed, a DadInt with key == abort is returned
                             if (reply.Key == "abort")
                             {
+                                // Gets Timespan and adds to the file ((with -1 cause aborted))
+                                //File.AppendAllText(dataPath, -1 + Environment.NewLine);
+                                /*using (StreamWriter writer = new StreamWriter(dataPath, true))
+                                {
+                                    writer.WriteLine(-1);
+                                }*/
+                                Console.WriteLine("TIMESPAN: " + -1);
+
                                 Console.WriteLine("Something went wrong during the transaction.. Please repeat again.");
                                 break;
                             }
                             Console.WriteLine($"DadInt with Id: {reply.Key}");
                             Console.WriteLine($"Has Value: {reply.Val}");
                         }
+                        // Gets Timespan and adds to the file
+                        //File.AppendAllText(dataPath, txStartTime.Subtract(DateTime.Now) + Environment.NewLine);
+                        /*using (StreamWriter writer = new StreamWriter(dataPath, true))
+                        {
+                            writer.WriteLine(DateTime.Now.Subtract(txStartTime));
+                        }*/
+                        Console.WriteLine("TIMESPAN: " + DateTime.Now.Subtract(txStartTime).ToString());
+
                         break;
 
                     // Wait command
