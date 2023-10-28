@@ -125,12 +125,14 @@ class Program
 
                         if (txReply.Count == 0)
                         {
-                            // Add the Timespan to the file
-                            using (FileStream fs = File.Create(dataPath))
+                            // Append the Timespan to the file, without overwriting it, in a new line
+                            using (FileStream fs = File.Open(dataPath, FileMode.Append, FileAccess.Write))
                             {
-                                Byte[] info = new UTF8Encoding(true).GetBytes(DateTime.Now.Subtract(txStartTime).ToString());
-                                fs.Write(info, 0, info.Length);
+                                string txTime = (DateTime.Now - txStartTime).ToString();
+                                byte[] txTimeBytes = new UTF8Encoding(true).GetBytes(txTime + "\n");
+                                fs.Write(txTimeBytes, 0, txTimeBytes.Length);
                             }
+                            
 
                             Console.WriteLine("Transaction with no reads available.");
                             break;
@@ -142,11 +144,12 @@ class Program
                             if (reply.Key == "abort")
                             {
                                 // Add the Timespan to the file
-                                using (FileStream fs = File.Create(dataPath))
+                                using (FileStream fs = File.Open(dataPath, FileMode.Append, FileAccess.Write))
                                 {
-                                    Byte[] info = new UTF8Encoding(true).GetBytes("-1");
-                                    fs.Write(info, 0, info.Length);
+                                    byte[] txTimeBytes = new UTF8Encoding(true).GetBytes("-1");
+                                    fs.Write(txTimeBytes, 0, txTimeBytes.Length);
                                 }
+
 
                                 Console.WriteLine("Something went wrong during the transaction.. Please repeat again.");
                                 break;
@@ -155,10 +158,11 @@ class Program
                             Console.WriteLine($"Has Value: {reply.Val}");
                         }
                         // Add the Timespan to the file
-                        using (FileStream fs = File.Create(dataPath))
+                        using (FileStream fs = File.Open(dataPath, FileMode.Append, FileAccess.Write))
                         {
-                            Byte[] info = new UTF8Encoding(true).GetBytes(DateTime.Now.Subtract(txStartTime).ToString());
-                            fs.Write(info, 0, info.Length);
+                            string txTime = (DateTime.Now - txStartTime).ToString();
+                            byte[] txTimeBytes = new UTF8Encoding(true).GetBytes(txTime + "\n");
+                            fs.Write(txTimeBytes, 0, txTimeBytes.Length);
                         }
 
                         break;
