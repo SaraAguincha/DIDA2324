@@ -91,7 +91,7 @@ namespace ManagementConsole
         {
             // Gets the full path of the configuration file
             string solutionDir = Resources.GetSolutionDirectoryInfo();
-            string configFile = solutionDir + "\\ManagementConsole\\configuration_sample.txt";
+            string configFile = solutionDir + "\\ManagementConsole\\config-4.txt";
 
             // Checks if the configuration file exists
             if (!File.Exists(configFile))

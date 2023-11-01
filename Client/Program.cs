@@ -48,24 +48,26 @@ class Program
         // Get the slot duration
         int duration = config.Slot.Item2;
 
+        // Get the number of slots
+        int numSlots = config.ProcessStates.Length;
+
         // Create the client service
         ClientService client = new ClientService(processId, tServers, lServers);
 
         // Get the client script
         string solutionDir = Resources.GetSolutionDirectoryInfo();
-        string scriptPath = solutionDir + "\\Client\\Scripts\\" + script + ".txt";
+        string scriptPath = solutionDir + "\\Client\\Scripts\\" + script;
         Console.WriteLine("Script path: " + scriptPath);
 
-        string fileName = "dataClient" + processId + ".txt";
-        string dataPath = solutionDir + "\\Client\\Scripts\\" + fileName;
-
-        if (File.Exists(dataPath))
-        {
-            File.Delete(dataPath);
-        }
+        int slotCounter = 1;
 
         while (true)
         {
+            if (slotCounter > numSlots)
+            {
+                break;
+            }
+
             // Read and parse the client script
             string[] lines = File.ReadAllLines(scriptPath);
 
@@ -124,16 +126,7 @@ class Program
                         if (txReply == null) { break; }
 
                         if (txReply.Count == 0)
-                        {
-                            // Append the Timespan to the file, without overwriting it, in a new line
-                            using (FileStream fs = File.Open(dataPath, FileMode.Append, FileAccess.Write))
-                            {
-                                string txTime = (DateTime.Now - txStartTime).ToString();
-                                byte[] txTimeBytes = new UTF8Encoding(true).GetBytes(txTime + "\n");
-                                fs.Write(txTimeBytes, 0, txTimeBytes.Length);
-                            }
-                            
-
+                        {                          
                             Console.WriteLine("Transaction with no reads available.");
                             break;
                         }
@@ -143,26 +136,11 @@ class Program
                             // When the transaction is not completed, a DadInt with key == abort is returned
                             if (reply.Key == "abort")
                             {
-                                // Add the Timespan to the file
-                                using (FileStream fs = File.Open(dataPath, FileMode.Append, FileAccess.Write))
-                                {
-                                    byte[] txTimeBytes = new UTF8Encoding(true).GetBytes("-1");
-                                    fs.Write(txTimeBytes, 0, txTimeBytes.Length);
-                                }
-
-
                                 Console.WriteLine("Something went wrong during the transaction.. Please repeat again.");
                                 break;
                             }
                             Console.WriteLine($"DadInt with Id: {reply.Key}");
                             Console.WriteLine($"Has Value: {reply.Val}");
-                        }
-                        // Add the Timespan to the file
-                        using (FileStream fs = File.Open(dataPath, FileMode.Append, FileAccess.Write))
-                        {
-                            string txTime = (DateTime.Now - txStartTime).ToString();
-                            byte[] txTimeBytes = new UTF8Encoding(true).GetBytes(txTime + "\n");
-                            fs.Write(txTimeBytes, 0, txTimeBytes.Length);
                         }
 
                         break;
@@ -205,6 +183,8 @@ class Program
                         break;
                 }
             }
+            slotCounter++;
         }
+        while (true) { }
     }
 }

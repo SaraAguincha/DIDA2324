@@ -39,7 +39,6 @@ namespace LServer.Services
         int highestRoundId = 0;
         bool isLeader = false;
         bool isLeaderDead = false;
-        int backoffTime = 100;
 
         List<Lease> leaseQueue = new List<Lease>();
         List<Lease> broadcastLeaseQueue = new List<Lease>();  // this is the value in paxos algorithm
@@ -157,7 +156,7 @@ namespace LServer.Services
             }
             
             // waits some time for responses
-            Task.WaitAll(taskList.ToArray(), this.epochDuration / 10);
+            Task.WaitAll(taskList.ToArray(), this.epochDuration / 5);
 
             // takes of the queue the first n elements that were broadcast
             lock (leaseQueue)
@@ -166,7 +165,7 @@ namespace LServer.Services
                 broadcastLeaseQueue.Clear(); 
             }
 
-            return leaseReplies.First().Ack;
+            return true;
         }
 
 
@@ -269,6 +268,13 @@ namespace LServer.Services
          */
         public void Consensus(int epoch)
         {
+            // Stop the server if the slots have ended
+            if (epoch > processStates.Length)
+            {
+                Console.WriteLine("End of slots, stopped server.");
+                while (true) { }
+            }
+
             // Kill the process if it's crashed in the process state for this epoch
             if (processStates[epoch - 1] != null)
             {
@@ -344,22 +350,18 @@ namespace LServer.Services
                 {
                     // Everything went fine and leader can broadcast the leases
                     case 1:
-                        this.backoffTime = 100;
                         BroadcastLeases();
                         break;
 
                     // Didn't succeed in the prepare phase due to not enough promise/accept replies, backoff time and repeats
                     case 0:
                         Console.WriteLine("\nDidn't succeed in the prepare/accept phase due to not enough promise/accept replies.");
-                        Thread.Sleep(this.backoffTime + (this.serverId * 10));
-                        this.backoffTime *= 2;
-                        Consensus(epoch);
+                        //Consensus(epoch);
                         break;
 
                     // Another server is leader, aborted the prepare phase
                     case -1:
                         Console.WriteLine("\nAnother server wants to be leader, aborted the prepare phase.");
-                        this.backoffTime = 100;
                         break;
                 }
             }
@@ -386,8 +388,6 @@ namespace LServer.Services
                     Console.WriteLine("\nAcceptor will now broadcastLeases");
                     BroadcastLeases();
                 }
-
-                this.backoffTime = 100;
             }
             Console.WriteLine("\nEnd of Consensus Epoch");
         }

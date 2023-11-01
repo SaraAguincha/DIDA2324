@@ -97,6 +97,13 @@ namespace TServer.Services
         // Execute at the beginning of each epoch
         public void slotBeginning(int epoch)
         {
+            // Stop the server if the slots have ended
+            if (epoch > processStates.Length)
+            {
+                Console.WriteLine("End of slots, stopped server.");
+                while (true) { }
+            }
+
             // Kill the process if it's crashed in the process state for this epoch
             if (processStates[epoch - 1] != null)
             {

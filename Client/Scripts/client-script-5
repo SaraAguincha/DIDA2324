@@ -1,4 +1,4 @@
-# DAD 2023-24 sample client script
+# DAD 2025-24 sample client script
 #
 # A line starting with a '#' character is a comment.
 #
@@ -11,11 +11,24 @@
 # a T command includes a read set and a write set
 # the read set is just a list of string keys
 # the write set contains keys and values
-T ("a-key-name","another-key-name") (<"name1",10>,<"name2",20>)
-# both the read set and write set can be empty but the parenthesis will still be in the command
-T () (<"name3",456>)
-# wait command (in milliseconds)
-W 5000
-# A status request from all the processes in the system
-# is issued via a S command
+W 8000
+T () ("k1",105)
+W 1000
+T ("k1") (<"k2",205>)
+W 1000
+T ("k2") (<"k3",305>)
+W 1000
+T ("k3") (<"k4",405>)
+W 1000
+T ("k4") (<"k5",505>)
+W 1000
+T ("k5") (<"k6",605>)
+W 1000
+T ("k6") (<"k7",705>)
+W 1000
+T ("k7") (<"k8",805>)
+W 1000
+T ("k8") (<"k9",903>)
+W 1000
+T ("k9") ()
 S
