@@ -10,6 +10,25 @@ using Utilities;
 // Client
 class Program
 {
+    // Current epoch (has to be global variable)
+    private static int epoch = 0;
+
+    private static bool stop = false;
+
+    // Function to execute at the start of each epoch
+    // Each epoch executes each DELTA miliseconds
+    static void NextEpoch(object state)
+    {
+        epoch++;
+        Console.WriteLine("Advanced to epoch number " + epoch.ToString());
+        int numSlots = (int)state;
+        if (epoch > numSlots)
+        {
+            Console.WriteLine("End of time slots.");
+            stop = true;
+        }
+    }
+
     public static void Main(string[] args)
     {
         // Sleep until the specified time on args[2]
@@ -59,20 +78,20 @@ class Program
         string scriptPath = solutionDir + "\\Client\\Scripts\\" + script;
         Console.WriteLine("Script path: " + scriptPath);
 
-        int slotCounter = 1;
+        // Timer related activities
+        TimerCallback timerCallback = NextEpoch;
+        Timer timer = new Timer(timerCallback, numSlots, duration, duration);
+        Console.WriteLine("Timer started at " + DateTime.Now);
 
-        while (true)
+        while (!stop)
         {
-            if (slotCounter > numSlots)
-            {
-                break;
-            }
-
             // Read and parse the client script
             string[] lines = File.ReadAllLines(scriptPath);
 
             foreach (string line in lines)
             {
+                if (stop) { break; }
+
                 string[] strings = line.Split(" ", StringSplitOptions.RemoveEmptyEntries);
 
                 if (strings.Length == 0) { continue; }
@@ -183,7 +202,6 @@ class Program
                         break;
                 }
             }
-            slotCounter++;
         }
         while (true) { }
     }
