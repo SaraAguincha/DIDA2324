@@ -76,7 +76,7 @@ namespace Utilities
         public static ServersConfig ParseConfigFile()
         {
             string solutionDir = GetSolutionDirectoryInfo();
-            string configFile = solutionDir + "\\ManagementConsole\\config-4.txt";
+            string configFile = solutionDir + "\\ManagementConsole\\config-7.txt";
 
             // Check if the configuration file exists
             if (!File.Exists(configFile))

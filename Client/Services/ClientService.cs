@@ -28,11 +28,30 @@ namespace Client.Services
             this.availableTServers = TServers;
             this.lServers = LServers;
 
-            // Initialy pick a random TServer to send the request
-            Random random = new Random();
-            int index = random.Next(TServers.Count);
-            this.server = TServers.ElementAt(index).Value;
-            this.currentServerId = TServers.ElementAt(index).Key;
+           // Initially pick a server whose last digit of the id matches the last digit of the client id
+           foreach (KeyValuePair<string, ClientTServerService.ClientTServerServiceClient> tServer in this.tServers)
+            {
+                // Extract the last two digits of the client id
+                string lastTwoDigits = this.clientId.Substring(this.clientId.Length - 2);
+
+                // If the last two digits are 10, connect to the last server in the list
+                if (lastTwoDigits == "10")
+                {
+                    this.server = tServers.ElementAt(tServers.Count - 1).Value;
+                    this.currentServerId = tServers.ElementAt(tServers.Count - 1).Key;
+                    break;
+                }
+
+                // If the last digit of the server id matches the last digit of the client id, pick that server
+                if (tServer.Key[tServer.Key.Length - 1] == this.clientId[this.clientId.Length - 1] || 
+                    tServer.Key[tServer.Key.Length - 1] == (this.clientId[this.clientId.Length - 1] - 5 ))
+                {
+                    this.server = tServer.Value;
+                    this.currentServerId = tServer.Key;
+                    break;
+                }
+            }
+
 
             Console.WriteLine("Client " + clientId + " connected to TServer " + currentServerId);
         }

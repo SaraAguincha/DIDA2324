@@ -25,13 +25,13 @@ P C2 C client-script-2
 P C3 C client-script-3
 #
 # number of time slots.
-S 6
+S 10
 #
 # this test starts at 12:10:15 (physical wall time)
 T 12:10:15
 #
 #  Length of each timeslot in milliseconds
-D 5000 
+D 2000
 #
 # F commands describe the state of server processes
 #
